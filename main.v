@@ -16,57 +16,74 @@ Class numerical_semigroup (A : Ensemble nat) : Prop := {
   ns_cofinite : Finite (Complement A)
 }.
 
-Section NumericalSemigroups.
+
+Section numerical_semigroup.
+
   Context A `{numerical_semigroup A} (n : nat).
 
   (* apery set *)
   Definition apery x := A x /\ (n <= x -> ~ A (x - n)).
 
-  (* equivalent definition for apery set *)
-  Definition apery_alt w :=
-    exists i, min (fun x => A x /\ congr_mod n x i) w.
+  Definition apery_min i w :=
+    min (fun x => A x /\ congr_mod n x i) w.
 
-  Theorem apery_alt_exists : n <> 0 -> forall i,
-    exists w, min (fun x => A x /\ congr_mod n x i) w.
+  Theorem apery_min_exists : n <> 0 -> forall i,
+    exists w, apery_min i w.
   Proof.
     intros n0 i. apply well_ordering_principle.
-    assert (D := nat_finite_definitive A).
-    destruct D as [m Hm]; try apply ns_cofinite.
-    apply (Inhabited_intro (i + m * n)).
-    unfold In. split.
+    destruct (nat_finite_definitive A) as [m Hm];
+      try apply ns_cofinite.
+    apply (Inhabited_intro (i + m * n)). split.
     + apply Hm. destruct n; lia.
     + unfold congr_mod. apply Div0.mod_add.
   Qed.
 
-  Theorem apery_alt_f : n <> 0 ->
-    exists (f : {x | x < n} -> nat),
-    injective f /\ Im (Full_set _) f = apery_alt.
+  Theorem apery_w_prop : n <> 0 -> forall i : {x | x < n},
+    exists ! w, apery_min (proj1_sig i) w.
   Proof.
-    intros n0.
-    set (R := fun (i : {x | x < n}) j => min (fun x => A x /\ congr_mod n x (proj1_sig i)) j).
-    destruct (rel_to_func R) as [f [F1 F2]].
-    - intros x.
-      destruct (apery_alt_exists n0 (proj1_sig x)) as [y Hy].
-      exists y. split; try assumption.
-      eauto using min_unique.
-    - exists f. subst R. simpl in *. split.
-      + clear F2. intros x y HI.
-	apply proj1_sig_inj.
-	destruct (F1 x) as [[_ Hx] _].
-	destruct (F1 y) as [[_ Hy] _].
-	unfold congr_mod in *. rewrite HI in Hx.
-	rewrite Hx in Hy. clear Hx HI f n0 F1.
-	destruct x, y. simpl in *.
-	rewrite mod_small, mod_small in Hy; assumption.
-      + ensemble_eq x Hx.
-	* destruct Hx. subst. unfold apery_alt. eauto.
-	* set (y := exist (fun x => x < n) (x mod n) (mod_upper_bound _ _ n0)).
-	  apply Im_intro with (x := y); try constructor.
-	  apply F2. subst y. simpl in *.
-	  destruct Hx as [i Hi].
-	  unfold congr_mod. unfold congr_mod in Hi.
-	  replace ((x mod n) mod n) with (i mod n); try assumption.
-	  rewrite Div0.mod_mod. symmetry. apply Hi.
+    intros n0 i.
+    destruct (apery_min_exists n0 (proj1_sig i)) as [w Hw].
+    exists w. split; try assumption.
+    eauto using min_unique.
+  Qed.
+
+  Definition apery_w (n0 : n <> 0) :=
+    proj1_sig (rel_to_func2 _ (apery_w_prop n0)).
+
+  Definition apery_w_spec (n0 : n <> 0) :
+    (forall i : {x | x < n}, apery_min (proj1_sig i) (apery_w n0 i)) /\ forall (i : {x | x < n}) w, apery_min (proj1_sig i) w -> w = apery_w n0 i :=
+    proj2_sig (rel_to_func2 _ (apery_w_prop n0)).
+
+  Theorem apery_w_inj (n0 : n <> 0) :
+    injective (apery_w n0).
+  Proof.
+    intros x y I.
+    apply proj1_sig_inj.
+    destruct (apery_w_spec n0) as [Hw _].
+    destruct (Hw x) as [[_ Hx] _].
+    destruct (Hw y) as [[_ Hy] _].
+    unfold congr_mod in *. rewrite I in Hx.
+    rewrite Hx in Hy. clear Hx I n0 Hw.
+    destruct x, y. simpl in *.
+    rewrite mod_small, mod_small in Hy; assumption.
+  Qed.
+
+  (* equivalent definition for apery set *)
+  Definition apery_alt w := exists i, apery_min i w.
+
+  Theorem apery_alt_w (n0 : n <> 0) :
+    Im (Full_set _) (apery_w n0) = apery_alt.
+  Proof.
+    ensemble_eq x Hx.
+    - destruct Hx. subst. unfold apery_alt.
+      destruct (apery_w_spec n0) as [SP _]. eauto.
+    - set (y := exist (fun x => x < n) (x mod n) (mod_upper_bound _ _ n0)).
+      apply Im_intro with (x := y); try constructor.
+      apply (apery_w_spec n0). subst y. simpl in *.
+      destruct Hx as [i Hi].
+      unfold apery_min, congr_mod in *.
+      replace ((x mod n) mod n) with (i mod n); try assumption.
+      rewrite Div0.mod_mod. symmetry. apply Hi.
   Qed.
 
   (* apery_alt has a representative for every modulo class *)

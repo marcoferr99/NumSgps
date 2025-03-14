@@ -1,5 +1,5 @@
 From Coq Require Export Ensembles Finite_sets.
-From Coq Require Import Arith Classical Classical_sets ClassicalUniqueChoice Image Lia ZArith.
+From Coq Require Import Arith Classical Classical_sets ClassicalUniqueChoice Description FunctionalExtensionality Image Lia ZArith.
 Export Nat.
 
 Arguments Add {U}.
@@ -25,11 +25,12 @@ Theorem min_unique (A : Ensemble nat) n m :
 Proof. unfold min. intuition auto using le_antisymm. Qed.
 
 (* every nonempty subset of nat has a minimum *)
-Theorem well_ordering_principle :
-  forall A : Ensemble nat, Inhabited A -> exists n, min A n.
+Theorem well_ordering_principle : forall A : Ensemble nat,
+  Inhabited A -> exists n, min A n.
 Proof.
   intros.
-  assert (E := dec_inh_nat_subset_has_unique_least_element A).
+  assert
+    (E := dec_inh_nat_subset_has_unique_least_element A).
   unfold has_unique_least_element in E.
   unfold min. destruct H. destruct E; try eauto.
   - auto using classic.
@@ -148,4 +149,68 @@ Section Relation.
     intros z y Hz. specialize H with z.
     apply unique_existence in H. apply H; auto.
   Qed.
+
+  Definition rel_to_func2 : (forall x, exists ! y, R x y) ->
+    {f | (forall x, R x (f x)) /\ forall x y, R x y -> y = f x}.
+  Proof.
+    intros. apply constructive_definite_description.
+    generalize (rel_to_func H). intros [f Hf].
+    exists f. split; try assumption.
+    intros g Hg. extensionality x. intuition.
+  Qed.
+
+  Definition rel_to_func_def (H : forall x, exists ! y, R x y) :=
+    proj1_sig (rel_to_func2 H).
+
+  Definition rel_to_func_spec (H : forall x, exists ! y, R x y) :
+    (forall x, R x (rel_to_func_def H x)) /\ forall x y, R x y -> y = rel_to_func_def H x :=
+    proj2_sig (rel_to_func2 H).
+
+  Definition rel_to_func_spec1 H :=
+    match (rel_to_func_spec H) with conj a b => a end.
+
+  Definition rel_to_func_spec2 H :=
+    match (rel_to_func_spec H) with conj a b => b end.
+
+  Class rel_func : Prop := {
+    rel_is_func : forall x, exists ! y, R x y
+  }.
+
 End Relation.
+
+Section rel_func.
+
+  Context {A B} (R : A -> B -> Prop) `{rel_func A B R}.
+
+  Definition rel_func_f :
+    {f | (forall x, R x (f x)) /\ forall x y, R x y -> y = f x}.
+  Proof.
+    apply constructive_definite_description.
+    destruct (rel_to_func R) as [f Hf];
+      try (apply rel_is_func; assumption).
+    exists f. split; try assumption.
+    intros g Hg. extensionality x. intuition.
+  Qed.
+
+  Definition rel_func_f_def := proj1_sig rel_func_f.
+
+  Definition rel_func_f_spec :
+    (forall x, R x (rel_func_f_def x)) /\ forall x y, R x y -> y = rel_func_f_def x :=
+    proj2_sig rel_func_f.
+
+End rel_func.
+
+Definition rel1 (x y : nat) := x = y.
+Instance rel1_is_func (n : nat) : rel_func rel1.
+Proof.
+  constructor. intros x. exists x. split; auto.
+  reflexivity.
+Qed.
+
+Theorem proj1_sig_im {U} (P : U -> Prop) :
+  Im (Full_set _) (@proj1_sig _ P) = P.
+Proof.
+  ensemble_eq x Hx.
+  - destruct Hx. subst. destruct x. assumption.
+  - apply Im_intro with (x := exist _ x Hx); constructor.
+Qed.
