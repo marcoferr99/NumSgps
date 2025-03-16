@@ -1,7 +1,5 @@
-From Coq Require Export Ensembles Finite_sets.
-From Coq Require Import Arith Classical ClassicalChoice Image Lia List.
-Require Export nat.
-Import ListNotations.
+From Coq Require Import Lia List.
+Require Export ensembles functions nat.
 
 
 (* submonoid of nat (with addition) *)
@@ -27,8 +25,8 @@ Section numerical_semigroup.
   Definition apery_min i w :=
     min (fun x => A x /\ congr_mod n x i) w.
 
-  Theorem apery_min_exists : n <> 0 -> forall i,
-    exists w, apery_min i w.
+  Theorem apery_min_exists : n <> 0 ->
+    forall i, exists w, apery_min i w.
   Proof.
     intros n0 i. apply well_ordering_principle.
     destruct (nat_finite_definitive A) as [m Hm];
@@ -38,7 +36,7 @@ Section numerical_semigroup.
     + unfold congr_mod. apply Div0.mod_add.
   Qed.
 
-  Theorem apery_w_prop : n <> 0 -> forall i : {x | x < n},
+  Theorem apery_w_is_func : n <> 0 -> forall i : {x | x < n},
     exists ! w, apery_min (proj1_sig i) w.
   Proof.
     intros n0 i.
@@ -48,17 +46,17 @@ Section numerical_semigroup.
   Qed.
 
   Definition apery_w (n0 : n <> 0) :=
-    proj1_sig (rel_to_func2 _ (apery_w_prop n0)).
+    proj1_sig (rel_func _ (apery_w_is_func n0)).
 
   Definition apery_w_spec (n0 : n <> 0) :
     (forall i : {x | x < n}, apery_min (proj1_sig i) (apery_w n0 i)) /\ forall (i : {x | x < n}) w, apery_min (proj1_sig i) w -> w = apery_w n0 i :=
-    proj2_sig (rel_to_func2 _ (apery_w_prop n0)).
+    proj2_sig (rel_func _ (apery_w_is_func n0)).
 
   Theorem apery_w_inj (n0 : n <> 0) :
     injective (apery_w n0).
   Proof.
     intros x y I.
-    apply proj1_sig_inj.
+    apply proj1_sig_injective.
     destruct (apery_w_spec n0) as [Hw _].
     destruct (Hw x) as [[_ Hx] _].
     destruct (Hw y) as [[_ Hy] _].
@@ -74,10 +72,10 @@ Section numerical_semigroup.
   Theorem apery_alt_w (n0 : n <> 0) :
     Im (Full_set _) (apery_w n0) = apery_alt.
   Proof.
-    ensemble_eq x Hx.
+    ex_ensembles x Hx.
     - destruct Hx. subst. unfold apery_alt.
       destruct (apery_w_spec n0) as [SP _]. eauto.
-    - set (y := exist (fun x => x < n) (x mod n) (mod_upper_bound _ _ n0)).
+    - set (y := @exist _ (fun x => x < n) (x mod n) (mod_upper_bound _ _ n0)).
       apply Im_intro with (x := y); try constructor.
       apply (apery_w_spec n0). subst y. simpl in *.
       destruct Hx as [i Hi].
@@ -86,92 +84,30 @@ Section numerical_semigroup.
       rewrite Div0.mod_mod. symmetry. apply Hi.
   Qed.
 
-  (* apery_alt has a representative for every modulo class *)
-  Theorem apery_alt_all_classes : n <> 0 ->
-    forall x, exists w, apery_alt w /\ congr_mod n x w.
-  Proof.
-    intros n0 x.
-    destruct (apery_alt_exists n0 x) as [w W].
-    exists w. split.
-    - unfold apery_alt. eauto.
-    - unfold min in *. intuition auto with congr_mod.
-  Qed.
-
-  Print Union.
-  Inductive rel {U} {E : Ensemble U} (i : sig E) : U -> sig E -> Prop :=
-    | rel1 x (H : E x) : rel i x (exist _ x H)
-    | rel2 x (H : ~ E x) : rel i x i.
-
-  Theorem cardinal_same U (E : Ensemble U) m :
-    cardinal E m -> cardinal (Full_set (sig E)) m.
-  Proof.
-    destruct (classic (inhabited (sig E))).
-    - destruct H0 as [i].
-      generalize (choice (@rel U E i)). intros [f Hf].
-      + intros x. destruct (classic (E x)).
-	* exists (exist _ x H0). apply rel1.
-	* exists i. apply rel2. assumption.
-      + intros C.
-	destruct (cardinal_Im_intro _ _ _ f _ C).
-	assert (Im E f = Full_set _). {
-	  apply Extensionality_Ensembles.
-	  split; try constructor.
-	  unfold Included, In. intros.
-	  destruct x0. exists x0; try assumption.
-	  specialize Hf with x0. inversion Hf.
-	  - subst. simpl in *. f_equal. apply proof_irrelevance.
-	  - subst. contradiction.
-	}
-	rewrite H1 in H0.
-	assert (m = x). {
-	  eapply injective_preserves_cardinal.
-	  - assert (injective (@proj1_sig _ E)).
-	    + intros a b I. destruct a, b. simpl in *.
-	      subst x0. f_equal. apply proof_irrelevance.
-	    + apply H2.
-	  - apply H0.
-	  - assert ((Im (Full_set {x : U | E x}) (@proj1_sig _ E)) = E).
-	    + apply Extensionality_Ensembles.
-	      split; unfold Included, In; intros a.
-	      * intros. inversion H2. subst. destruct x0.
-		simpl. assumption.
-	      * intros. exists (exist _ a H2).
-		-- constructor.
-		-- simpl. reflexivity.
-	    + rewrite <- H2 in C. apply C.
-	}
-	subst m. assumption.
-    - intros. assert (0 = m).
-      + eapply cardinal_Empty. replace (Empty_set _) with E; try assumption.
-	* apply Extensionality_Ensembles.
-	  split; unfold Included, In; intros x Hx.
-	  -- exfalso. apply H0. constructor.
-	     apply (exist _ x Hx).
-	  -- inversion Hx.
-      + subst m. assert ((Full_set {x : U | E x}) = (Empty_set {x | E x})).
-	* apply Extensionality_Ensembles.
-	  split; intros x Hx; unfold In.
-	  -- exfalso. apply H0. constructor. apply x.
-	  -- constructor.
-	* rewrite H2 at 1. constructor.
-  Qed.
-
   Theorem apery_alt_card : n <> 0 -> cardinal apery_alt n.
   Proof.
     intros n0.
-    generalize (apery_alt_f n0). intros [f [If Hf]].
     generalize (cardinal_lt_n n). intros C.
-    apply cardinal_same in C.
-    destruct (cardinal_Im_intro _ _ _ f _ C) as [p Hp].
-    assert (p = n).
-    - eapply injective_preserves_cardinal; eauto.
-    - subst p. rewrite <- Hf. assumption.
-Qed.
+    apply sig_cardinal in C as Cm.
+    destruct Cm as [m Cm].
+    replace m with n in *;
+      try (eapply sig_cardinal_same; eassumption).
+      clear m.
+    eapply cardinal_Im_intro in Cm as C1.
+    destruct C1 as [p Cp].
+    replace p with n in *.
+    - rewrite <- (apery_alt_w n0). eassumption.
+    - symmetry. eapply injective_preserves_cardinal.
+      + apply apery_w_inj.
+      + apply Cm.
+      + eassumption.
+  Qed.
 
   (* the apery set of n does not contain two different numbers who are congruent
      modulo n *)
   Theorem apery_congr_unique : A n ->
-    forall a b, apery a -> apery b -> congr_mod n a b -> a = b.
+    forall a b, apery a -> apery b -> congr_mod n a b ->
+    a = b.
   Proof.
     intros An.
     assert (T : forall a b, apery a -> apery b -> a <= b -> congr_mod n a b -> a = b). {
@@ -203,6 +139,18 @@ Qed.
     }
     intros. destruct (le_ge_cases a b); try auto.
     - symmetry. auto with congr_mod.
+  Qed.
+
+  (* apery_alt has a representative for every modulo class *)
+  Theorem apery_alt_all_classes : n <> 0 ->
+    forall x, exists w, apery_alt w /\ congr_mod n x w.
+  Proof.
+    intros n0 x.
+    destruct (apery_min_exists n0 x) as [w W].
+    exists w. split.
+    - unfold apery_alt. eauto.
+    - unfold apery_min, min in *.
+      intuition auto with congr_mod.
   Qed.
 
   (* apery and apery_alt are the same set *)
@@ -308,7 +256,7 @@ Qed.
   Definition generator B := forall a, A a ->
     exists r x l, (forall y, y < r -> B (x y)) /\
     a = fold_right (fun u v => v + l u * x u) 0 (seq 0 r).
-End NumericalSemigroups.
+End numerical_semigroup.
 
 Theorem finite_gen A `{numerical_semigroup A} : exists B, Finite B /\ generator A B.
 Proof.

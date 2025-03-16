@@ -1,19 +1,6 @@
-From Coq Require Export Ensembles Finite_sets.
-From Coq Require Import Arith Classical Classical_sets ClassicalUniqueChoice Description FunctionalExtensionality Image Lia ZArith.
+From Coq Require Import Arith Lia ZArith.
+Require Import ensembles.
 Export Nat.
-
-Arguments Add {U}.
-Arguments cardinal {U}.
-Arguments Complement {U}.
-Arguments Finite {U}.
-Arguments In {U}.
-Arguments Included {U}.
-Arguments Inhabited {U}.
-Arguments Inhabited_intro {U B}.
-Arguments injective {U V}.
-Arguments Intersection {U}.
-Arguments Im {U V}.
-Arguments Union {U}.
 
 
 (* minimum of a subset of nat *)
@@ -35,20 +22,6 @@ Proof.
   unfold min. destruct H. destruct E; try eauto.
   - auto using classic.
   - destruct H0. eauto.
-Qed.
-
-(* the morgan law *)
-Theorem de_morgan_cu {U} (A B : Ensemble U) :
-  Complement (Union A B) =
-  Intersection (Complement A) (Complement B).
-Proof.
-  apply Extensionality_Ensembles.
-  split; intros x Hx; unfold Complement, In in *.
-  - constructor; unfold In; intros C; apply Hx.
-    + constructor. assumption.
-    + apply Union_intror. assumption.
-  - inversion Hx. subst. unfold In in *.
-    intros C. inversion C; subst; contradiction.
 Qed.
 
 (* a cofinite nat ensemble contains all numbers greater than some fixed number *)
@@ -124,93 +97,4 @@ Proof.
       * destruct (classic (x = n)).
 	-- subst. apply Union_intror. constructor.
 	-- constructor. unfold In. lia.
-Qed.
-
-
-Theorem proj1_sig_inj {U} (A : Ensemble U) :
-  injective (@proj1_sig U A).
-Proof.
-  intros x y Hf. destruct x, y. simpl in *.
-  subst. f_equal. apply proof_irrelevance.
-Qed.
-
-Ltac ensemble_eq x Hx :=
-  apply Extensionality_Ensembles; split; unfold Included, In; intros x Hx.
-
-Section Relation.
-  Context {A B : Type} (R : A -> B -> Prop).
-
-  Definition rel_to_func : (forall x, exists ! y, R x y) ->
-    exists f, (forall x, R x (f x)) /\ forall x y, R x y -> y = f x.
-  Proof.
-    intros H.
-    destruct (unique_choice _ _ _ H) as [f Hf].
-    exists f. intros. split; try apply Hf.
-    intros z y Hz. specialize H with z.
-    apply unique_existence in H. apply H; auto.
-  Qed.
-
-  Definition rel_to_func2 : (forall x, exists ! y, R x y) ->
-    {f | (forall x, R x (f x)) /\ forall x y, R x y -> y = f x}.
-  Proof.
-    intros. apply constructive_definite_description.
-    generalize (rel_to_func H). intros [f Hf].
-    exists f. split; try assumption.
-    intros g Hg. extensionality x. intuition.
-  Qed.
-
-  Definition rel_to_func_def (H : forall x, exists ! y, R x y) :=
-    proj1_sig (rel_to_func2 H).
-
-  Definition rel_to_func_spec (H : forall x, exists ! y, R x y) :
-    (forall x, R x (rel_to_func_def H x)) /\ forall x y, R x y -> y = rel_to_func_def H x :=
-    proj2_sig (rel_to_func2 H).
-
-  Definition rel_to_func_spec1 H :=
-    match (rel_to_func_spec H) with conj a b => a end.
-
-  Definition rel_to_func_spec2 H :=
-    match (rel_to_func_spec H) with conj a b => b end.
-
-  Class rel_func : Prop := {
-    rel_is_func : forall x, exists ! y, R x y
-  }.
-
-End Relation.
-
-Section rel_func.
-
-  Context {A B} (R : A -> B -> Prop) `{rel_func A B R}.
-
-  Definition rel_func_f :
-    {f | (forall x, R x (f x)) /\ forall x y, R x y -> y = f x}.
-  Proof.
-    apply constructive_definite_description.
-    destruct (rel_to_func R) as [f Hf];
-      try (apply rel_is_func; assumption).
-    exists f. split; try assumption.
-    intros g Hg. extensionality x. intuition.
-  Qed.
-
-  Definition rel_func_f_def := proj1_sig rel_func_f.
-
-  Definition rel_func_f_spec :
-    (forall x, R x (rel_func_f_def x)) /\ forall x y, R x y -> y = rel_func_f_def x :=
-    proj2_sig rel_func_f.
-
-End rel_func.
-
-Definition rel1 (x y : nat) := x = y.
-Instance rel1_is_func (n : nat) : rel_func rel1.
-Proof.
-  constructor. intros x. exists x. split; auto.
-  reflexivity.
-Qed.
-
-Theorem proj1_sig_im {U} (P : U -> Prop) :
-  Im (Full_set _) (@proj1_sig _ P) = P.
-Proof.
-  ensemble_eq x Hx.
-  - destruct Hx. subst. destruct x. assumption.
-  - apply Im_intro with (x := exist _ x Hx); constructor.
 Qed.
