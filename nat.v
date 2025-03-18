@@ -25,7 +25,7 @@ Proof.
 Qed.
 
 (* a cofinite nat ensemble contains all numbers greater than some fixed number *)
-Theorem nat_finite_definitive (A : Ensemble nat) :
+Theorem cofinite_definitive (A : Ensemble nat) :
   Finite (Complement A) -> exists m, forall n, n >= m -> A n.
 Proof.
   intros. remember (Complement A) as C eqn : EC.

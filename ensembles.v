@@ -11,6 +11,7 @@ Arguments Included {U}.
 Arguments Inhabited {U}.
 Arguments Inhabited_intro {U B}.
 Arguments Intersection {U}.
+Arguments Subtract {U}.
 Arguments Union {U}.
 Arguments cardinal {U}.
 Arguments injective {U V}.
@@ -51,6 +52,16 @@ Proof.
   - apply Im_intro with (x := exist x Hx); constructor.
 Qed.
 
+Theorem injective_cardinal {U V} (A : Ensemble U) (f : U -> V) n :
+  injective f -> cardinal A n -> cardinal (Im A f) n.
+Proof.
+  intros I C.
+  destruct (cardinal_Im_intro _ _ _ f _ C) as [p Cp].
+  assert (p = n);
+    try (eapply injective_preserves_cardinal; eassumption).
+  subst. assumption.
+Qed.
+
 
 
 
@@ -58,7 +69,7 @@ Inductive rel {U} {E : Ensemble U} (i : sig E) : U -> sig E -> Prop :=
   | rel_intro1 x (H : E x) : rel i x (exist x H)
   | rel_intro2 x (H : ~ E x) : rel i x i.
 
-Theorem sig_cardinal {U} (E : Ensemble U) m :
+Theorem sig_cardinal_ex {U} (E : Ensemble U) m :
   cardinal E m -> exists n, cardinal (Full_set (sig E)) n.
 Proof.
   destruct (classic (inhabited (sig E))) as [I | I].
@@ -84,11 +95,15 @@ Proof.
     rewrite H. exists 0. constructor.
 Qed.
 
-Theorem sig_cardinal_same {U} (E : Ensemble U) m n :
-  cardinal E m -> cardinal (Full_set (sig E)) n -> m = n.
+Theorem sig_cardinal {U} (E : Ensemble U) m :
+  cardinal E m -> cardinal (Full_set (sig E)) m.
 Proof.
-  intros Cm Cn.
-  rewrite <- (proj1_sig_image E) in Cm.
-  eapply injective_preserves_cardinal; try eassumption.
-  apply (proj1_sig_injective E).
+  intros Cm.
+  destruct (sig_cardinal_ex _ _ Cm) as [n Cn].
+  assert (m = n). {
+    rewrite <- (proj1_sig_image E) in Cm.
+    eapply injective_preserves_cardinal; try eassumption.
+    apply proj1_sig_injective.
+  }
+  subst. assumption.
 Qed.
