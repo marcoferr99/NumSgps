@@ -1,18 +1,108 @@
-From Coq Require Import Lia List.
+From Coq Require Import Euclid Lia List.
 Require Export ensembles functions nat.
+Import ListNotations.
 
 
 (* submonoid of nat (with addition) *)
-Class nat_submonoid (A : Ensemble nat) : Prop := {
+Class nat_submonoid (A : nat -> Prop) : Prop := {
   ns_zero : A 0;
   ns_closed : forall a b, A a -> A b -> A (a + b)
 }.
 
+Theorem sub_mul_closed A `{nat_submonoid A} :
+  forall n m, A m -> A (n * m).
+Proof.
+  intros. induction n.
+  - rewrite mul_0_l. apply ns_zero.
+  - apply ns_closed; assumption.
+Qed.
+
 (* numerical semigroup definition *)
-Class numerical_semigroup (A : Ensemble nat) : Prop := {
+Class numerical_semigroup (A : nat -> Prop) : Prop := {
   ns_submonoid :: nat_submonoid A;
   ns_cofinite : Finite (Complement A)
 }.
+
+Theorem numerical_semigroup_alt A `{nat_submonoid A} :
+  numerical_semigroup A <-> exists x y, A x /\ A y /\ x - y = 1.
+Proof.
+  split; intros I.
+  - assert (exists a, A a /\ A (S a)) as [a [Aa As]]. {
+      destruct (cofinite_definitive A) as [m Hm];
+	try apply I.
+      exists m. split; apply Hm; lia.
+    }
+    exists (S a), a. repeat (split; try assumption).
+    clear Aa As. induction a; auto.
+  - assert (exists a, A a /\ A (a + 1)) as [a [Aa Ha]]. {
+      destruct I as [x [y [Ax [Ay Hxy]]]].
+      exists y. split; try assumption.
+      replace (y + 1) with x; try lia. assumption.
+    }
+    assert (Hn : forall n, n >= (a - 1) * (a + 1) -> A n). {
+      intros n Hn. destruct a.
+      - replace n with (n * 1); try lia.
+	apply sub_mul_closed; assumption.
+      - assert (diveucl n (S a)) as [q r g e].
+	  { apply eucl_dev. lia. }
+	assert (N : n = (q - r) * (S a) + r * ((S a) + 1)). {
+	  assert (q >= r). {
+	    apply le_trans with a; try lia.
+	    assert (a * (S a) <= q * (S a)); try lia.
+	    rewrite mul_le_mono_pos_r; [eassumption | lia].
+	  }
+	  rewrite mul_sub_distr_r, mul_add_distr_l.
+	  rewrite add_assoc, sub_add; try lia.
+	  apply mul_le_mono_r. assumption.
+	}
+	rewrite N.
+	apply ns_closed; apply sub_mul_closed; assumption.
+    }
+    set (m := (a - 1) * (a + 1)).
+    assert (In : Included (Complement A) (fun x => x < m)). {
+      unfold Included, In, Complement. intros.
+      destruct (le_gt_cases m x); try assumption.
+      exfalso. auto with sets.
+    }
+    constructor; try assumption.
+    eapply Finite_downward_closed; try eassumption.
+    clear In. induction m.
+    + replace (fun x => x < 0) with (Empty_set nat);
+	try constructor.
+	ex_ensembles x Hx; [contradiction | lia].
+    + replace (fun x => x < S m) with (Add (fun x => x < m) m).
+      * constructor; try assumption. unfold In. lia.
+      * ex_ensembles x Hx.
+	-- destruct Hx as [x Hx | x Hx].
+	   ++ unfold In in *. lia.
+	   ++ inversion Hx. lia.
+	-- destruct (eq_dec x m).
+	   ++ subst. apply Union_intror. constructor.
+	   ++ constructor. unfold In. lia.
+Qed.
+
+Example even_not_numerical_semigroup :
+  ~ numerical_semigroup (fun x => exists y, x = 2 * y).
+Proof.
+  intros C.
+  destruct (numerical_semigroup_alt (fun x => exists y, x = 2 * y)) as [H _].
+  destruct H as [x [y [[a Ha] [[b H2] H3]]]];
+    try assumption.
+  subst. lia.
+Qed.
+
+Section numerical_semigroup.
+
+  Context A `{numerical_semigroup A}.
+
+  Definition gaps := Complement A.
+
+  Definition genus g := cardinal gaps g.
+
+  Definition multiplicity m := min (Subtract A 0) m.
+
+End numerical_semigroup.
+Check gaps.
 
 
 Section numerical_semigroup.
@@ -22,7 +112,7 @@ Section numerical_semigroup.
   (* apery set *)
   Definition apery x := A x /\ (n <= x -> ~ A (x - n)).
 
-  (* the apery set of n does not contain two different numbers who are congruent
+  (* the apery set of n does not contain two different numbers that are congruent
      modulo n *)
   Theorem apery_congr_unique : A n ->
     forall a b, apery a -> apery b ->
@@ -215,33 +305,113 @@ Section numerical_semigroup.
 	apply (mul_cancel_r _ _ n); try assumption. lia.
   Qed.
 
-  Definition generator B := forall a, A a ->
+  Definition generator B := Included B A /\
+    forall a, A a ->
     exists r x l, (forall y, y < r -> B (x y)) /\
     a = fold_right (fun u v => v + l u * x u) 0 (seq 0 r).
  
   Theorem apery_generator : A n -> n <> 0 ->
     generator (Add apery n).
   Proof.
-    intros An n0 a Aa.
-    generalize (apery_generates An n0 a Aa).
-    intros [k [[w [[Aw E] _]] _]].
-    exists 2.
-    exists (fun y => match y with
-		     | 0 => n
-		     | S y => w
-		     end).
-    exists (fun y => match y with
-		     | 0 => k
-		     | S y => 1
-		     end).
-    split.
-    + intros. destruct y.
-      * apply Union_intror. constructor.
-      * constructor. assumption.
-    + simpl. lia.
+    intros An n0. split.
+    - intros x Hx. unfold In in *.
+      destruct Hx as [x Hx | x Hx].
+      + unfold apery, In in *. intuition.
+      + destruct Hx. assumption.
+    - intros a Aa.
+      generalize (apery_generates An n0 a Aa).
+      intros [k [[w [[Aw E] _]] _]].
+      exists 2.
+      exists (fun y => match y with
+		       | 0 => n
+		       | S y => w
+		       end).
+      exists (fun y => match y with
+		       | 0 => k
+		       | S y => 1
+		       end).
+      split.
+      + intros. destruct y.
+	* apply Union_intror. constructor.
+	* constructor. assumption.
+      + simpl. lia.
   Qed.
 
 End numerical_semigroup.
+
+Fixpoint ordered_list_add max l :=
+  match l with
+  | [] => [0]
+  | h :: t => if h <? max then S h :: t else
+      match ordered_list_add max t with
+      | [] => []
+      | h :: t => h :: h :: t
+      end
+  end.
+
+Fixpoint ordered_list_nth max n :=
+  match n with
+  | 0 => []
+  | S n => ordered_list_add max (ordered_list_nth max n)
+  end.
+
+Definition nth_sum l n :=
+  fold_right (fun x y => y + nth x l 0) 0 (ordered_list_nth (length l - 1) n).
+
+Fixpoint first_congr l m a i n :=
+  match i with
+  | 0 => 0
+  | S i => let x := nth_sum l n in
+      if x mod m =? a mod m then x else first_congr l m a i (S n)
+  end.
+Compute first_congr [4;7;10] 4 1 100 0.
+
+Theorem t1 A `{numerical_semigroup A} l :
+  generator A (fun x => List.In x l) ->
+  forall n, A (nth_sum l n).
+Proof.
+  intros G n. unfold nth_sum.
+  remember (ordered_list_nth (length l - 1) n) as ls.
+  remember (length ls) as ln.
+  clear Heqls. generalize dependent ls. induction ln.
+  - intros. assert (ls = []).
+    + apply length_zero_iff_nil. auto.
+    + rewrite H0. simpl. apply ns_zero.
+  - intros. destruct ls.
+    + discriminate.
+    + simpl. apply ns_closed.
+      * apply IHln. auto.
+      * destruct G as [G _]. unfold Included, In in G.
+	apply G. apply nth_In.
+Abort.
+
+Compute nth_sum [4;7;10] 9.
+
+Example apery_example1 A `{numerical_semigroup A} :
+  generator A (fun x => List.In x [4;7;10]) ->
+  apery A 4 = (fun x => List.In x [0;7;10;17]).
+Proof.
+  intros I.
+  assert (n0 : 4 <> 0); try lia.
+  assert (A4 : A 4). { apply I. intuition. }
+  rewrite <- (apery_w_eq _ 4 n0); try assumption.
+  ex_ensembles x Hx.
+  - destruct Hx as [x _ y Hy]. subst.
+    destruct x as [x p].
+    assert (O : x = 0 \/ x = 1 \/ x = 2 \/ x = 3 \/ x = 4); try lia.
+    repeat destruct O as [O | O]; subst;
+      [left | do 3 right; left | left | left | left];
+      apply apery_w_spec; simpl.
+    + split; try lia. split; [apply ns_zero | reflexivity].
+    + split.
+      * split; try reflexivity.
+	destruct I as [I _].
+	replace 17 with (10 + 7); try reflexivity.
+	unfold Included, In in *.
+	apply ns_closed; apply I; simpl; intuition.
+      *
+	-- unfold List.In.
+Abort.
 
 
 Theorem finite_gen A `{numerical_semigroup A} : exists B, Finite B /\ generator A B.
