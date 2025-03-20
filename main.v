@@ -1,4 +1,4 @@
-From Coq Require Import Euclid Lia List.
+From Coq Require Import Euclid Factorial Lia List.
 Require Export ensembles functions nat.
 Import ListNotations.
 
@@ -305,10 +305,15 @@ Section numerical_semigroup.
 	apply (mul_cancel_r _ _ n); try assumption. lia.
   Qed.
 
+  Inductive generates_el (B : nat -> Prop) : nat -> Prop :=
+    generates_el_intro a r x l :
+      (forall y, y < r -> B (x y)) ->
+      a = fold_right (fun u v => v + l u * x u) 0 (seq 0 r) ->
+      generates_el B a.
+  Arguments generates_el_intro {B a}.
+
   Definition generator B := Included B A /\
-    forall a, A a ->
-    exists r x l, (forall y, y < r -> B (x y)) /\
-    a = fold_right (fun u v => v + l u * x u) 0 (seq 0 r).
+    forall a, A a -> generates_el B a.
  
   Theorem apery_generator : A n -> n <> 0 ->
     generator (Add apery n).
@@ -321,16 +326,17 @@ Section numerical_semigroup.
     - intros a Aa.
       generalize (apery_generates An n0 a Aa).
       intros [k [[w [[Aw E] _]] _]].
-      exists 2.
-      exists (fun y => match y with
-		       | 0 => n
-		       | S y => w
-		       end).
-      exists (fun y => match y with
-		       | 0 => k
-		       | S y => 1
-		       end).
-      split.
+      apply (generates_el_intro
+	2
+	(fun y => match y with
+			 | 0 => n
+			 | S y => w
+			 end)
+	(fun y => match y with
+			 | 0 => k
+			 | S y => 1
+			 end)
+      ).
       + intros. destruct y.
 	* apply Union_intror. constructor.
 	* constructor. assumption.
@@ -339,53 +345,159 @@ Section numerical_semigroup.
 
 End numerical_semigroup.
 
-Fixpoint ordered_list_add max l :=
+
+Fixpoint olist_add max l :=
   match l with
   | [] => [0]
   | h :: t => if h <? max then S h :: t else
-      match ordered_list_add max t with
+      match olist_add max t with
       | [] => []
       | h :: t => h :: h :: t
       end
   end.
 
-Fixpoint ordered_list_nth max n :=
+Theorem olist_add_le max l :
+  Forall (fun x => x <= max) l ->
+  Forall (fun x => x <= max) (olist_add max l).
+Proof.
+  intros F. induction l.
+  - simpl. constructor; [lia | constructor].
+  - destruct (le_gt_cases max a).
+    + inversion F. subst.
+      replace a with max; try lia. simpl.
+      replace (max <? max) with false.
+      * remember (olist_add max l) as ls.
+	destruct ls; [constructor | ].
+	constructor; auto.
+	apply IHl in H3. inversion H3. assumption.
+      * symmetry. apply Compare_dec.leb_correct_conv. lia.
+    + simpl. apply ltb_lt in H as L. rewrite L.
+      constructor; try lia. inversion F. assumption.
+Qed.
+
+Fixpoint olist_nth max n :=
   match n with
   | 0 => []
-  | S n => ordered_list_add max (ordered_list_nth max n)
+  | S n => olist_add max (olist_nth max n)
   end.
 
+Theorem olist_nth_le max n :
+  Forall (fun x => x <= max) (olist_nth max n).
+Proof.
+  induction n; [constructor | ].
+  apply olist_add_le. assumption.
+Qed.
+
 Definition nth_sum l n :=
-  fold_right (fun x y => y + nth x l 0) 0 (ordered_list_nth (length l - 1) n).
+  fold_right (fun x y => y + nth x l 0) 0 (olist_nth (length l - 1) n).
+
+Theorem nth_sum_in A `{numerical_semigroup A} l :
+  generator A (fun x => List.In x l) ->
+  forall n, A (nth_sum l n).
+Proof.
+  intros G n.
+  destruct (eq_dec (length l) 0) as [l0 | l0].
+  - apply length_zero_iff_nil in l0. subst.
+    replace (nth_sum [] n) with 0; try apply ns_zero.
+    unfold nth_sum. simpl.
+    remember (olist_nth 0 n) as ls eqn : E.
+    clear E. induction ls; try reflexivity.
+    simpl. destruct a; rewrite add_0_r; assumption.
+  - unfold nth_sum.
+    generalize (olist_nth_le (length l - 1) n). intros F.
+    remember (olist_nth (length l - 1) n) as ls eqn : E.
+    remember (length ls) as ln eqn : En. clear E.
+    generalize dependent ls. induction ln as [ | ln IH].
+    + intros.
+      symmetry in En. apply length_zero_iff_nil in En.
+      subst. apply ns_zero.
+    + intros. destruct ls; try discriminate.
+      simpl. apply ns_closed.
+      * apply IH; auto. inversion F. assumption.
+      * destruct G as [G _]. unfold Included, In in G.
+	apply G. apply nth_In. inversion F. subst. lia.
+Qed.
+
+Fixpoint list_min l :=
+  match l with
+  | [] => 0
+  | [x] => x
+  | h :: t => Nat.min h (list_min t)
+  end.
+
+Definition nth_sum_limit l n :=
+  let ln := length (olist_nth (length l - 1) n) in
+  ln * list_min l.
+
+Theorem t0 (f : nat -> nat) l a :
+  fold_right (fun u v => v + f u) a l = fold_right (fun u v => v + f u) 0 l + a.
+Proof.
+  induction l.
+  - reflexivity.
+  - simpl. rewrite IHl. lia.
+Qed.
+
+Theorem t1 (f : nat -> nat) l1 l2 :
+  fold_right (fun u v => v + f u) 0 (l1 ++ l2) = fold_right (fun u v => v + f u) 0 l1 + fold_right (fun u v => v + f u) 0 l2.
+Proof.
+  rewrite fold_right_app. induction l2.
+  - simpl. lia.
+  - simpl. rewrite t0. reflexivity.
+Qed.
+
+Theorem test l a : generates_el (fun x => List.In x l) a ->
+  exists ls,
+  fold_right (fun x y => y + nth x l 0) 0 ls = a.
+Proof.
+  intros G. destruct G as [a r x k G1 G2].
+  generalize dependent a. generalize dependent x.
+  generalize dependent k. induction r.
+  - simpl in *. exists []. simpl. auto.
+  - intros. rewrite seq_S in G2.
+    rewrite fold_right_app in G2. simpl in G2.
+    specialize IHr with k x (fold_right (fun u v => v + k u * x u) 0 (seq 0 r)).
+    destruct IHr.
+    + intros. apply G1. lia.
+    + reflexivity.
+    + assert (exists x0, nth x0 l 0 = x r). {
+	specialize G1 with r.
+	destruct (In_nth l (x r) 0).
+	- apply G1. lia.
+	- exists x1. apply H0.
+      }
+      destruct H0.
+      exists (repeat x1 (k r) ++ x0).
+      rewrite t1. rewrite H. subst a.
+      rewrite (t0 _ _ (k r * x r)). rewrite add_comm.
+      f_equal. remember (k r) as m.
+      clear Heqm.
+      induction m.
+      * simpl. reflexivity.
+      * simpl. rewrite IHm. rewrite (add_comm (x r)).
+	f_equal. assumption.
+Qed.
+
+Theorem nth_sum_all A `{numerical_semigroup A} l n :
+  generator A (fun x => List.In x l) ->
+  forall a, A a /\ a <= nth_sum_limit l n ->
+  exists m, m <= n /\ a = nth_sum l m.
+Proof.
+  intros [_ G] a [Aa L].
+  generalize (G a Aa). clear G. intros G.
+  destruct G as [a r x k G1 G2].
+  intros [r [x [k [G1 G2]]]].
+  specialize G with a. apply G in Aa as G.
+Abort.
 
 Fixpoint first_congr l m a i n :=
   match i with
   | 0 => 0
-  | S i => let x := nth_sum l n in
+  | S i => let x := fst (nth_sum l n) in
       if x mod m =? a mod m then x else first_congr l m a i (S n)
   end.
 Compute first_congr [4;7;10] 4 1 100 0.
 
-Theorem t1 A `{numerical_semigroup A} l :
-  generator A (fun x => List.In x l) ->
-  forall n, A (nth_sum l n).
-Proof.
-  intros G n. unfold nth_sum.
-  remember (ordered_list_nth (length l - 1) n) as ls.
-  remember (length ls) as ln.
-  clear Heqls. generalize dependent ls. induction ln.
-  - intros. assert (ls = []).
-    + apply length_zero_iff_nil. auto.
-    + rewrite H0. simpl. apply ns_zero.
-  - intros. destruct ls.
-    + discriminate.
-    + simpl. apply ns_closed.
-      * apply IHln. auto.
-      * destruct G as [G _]. unfold Included, In in G.
-	apply G. apply nth_In.
-Abort.
-
-Compute nth_sum [4;7;10] 9.
+Compute nth_sum [] 9.
 
 Example apery_example1 A `{numerical_semigroup A} :
   generator A (fun x => List.In x [4;7;10]) ->
