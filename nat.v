@@ -1,6 +1,7 @@
-From Coq Require Import Arith Lia ZArith.
-Require Import ensembles.
-Export Nat.
+From Coq Require Export List.
+From Coq Require Import Arith Lia Permutation ZArith.
+Require Export ensembles.
+Export ListNotations Nat.
 
 
 (* minimum of a subset of nat *)
@@ -97,4 +98,30 @@ Proof.
       * destruct (classic (x = n)).
 	-- subst. apply Union_intror. constructor.
 	-- constructor. unfold In. lia.
+Qed.
+
+
+Definition sum {T} (f : T -> nat) l :=
+  fold_right (fun x y => f x + y) 0 l.
+
+Theorem fold_right_sum {T} (f : T -> nat) l a :
+  fold_right (fun x y => f x + y) a l = sum f l + a.
+Proof. induction l; simpl; lia. Qed.
+
+Theorem sum_app {T} (f : T -> nat) l1 l2 :
+  sum f (l1 ++ l2) = sum f l1 + sum f l2.
+Proof.
+  unfold sum. rewrite fold_right_app.
+  induction l2; simpl; try lia.
+  apply fold_right_sum.
+Qed.
+
+Theorem sum_permutation {T} f (l1 l2 : list T) :
+  Permutation l1 l2 -> sum f l1 = sum f l2.
+Proof.
+  intros P. induction P using Permutation_ind_bis.
+  - reflexivity.
+  - simpl. rewrite IHP. reflexivity.
+  - simpl. rewrite IHP. lia.
+  - rewrite IHP1. assumption.
 Qed.
