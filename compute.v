@@ -167,6 +167,13 @@ Proof.
 	    * rewrite length_skipn in H1. lia.
 	    * lia.
       }
+      assert (LA : forall T x (l : list T) k, k < length l -> length (firstn k l ++ [x] ++ skipn (S k) l) = length l). {
+	clear. intros. repeat rewrite length_app.
+	rewrite length_skipn.
+	rewrite <- (firstn_skipn k l) at 3.
+	rewrite length_app. f_equal. rewrite length_skipn.
+	simpl. lia.
+      }
       set (h := firstn k l ++ [0] ++ skipn (S k) l).
       assert (LocallySorted ge h). {
 	subst h.
@@ -227,11 +234,7 @@ Proof.
 	   ++ rewrite <- firstn_skipn with (n := S k).
 	      apply incl_appr. apply incl_refl.
 	   ++ assumption.
-      * subst h. repeat rewrite length_app.
-	rewrite length_skipn.
-	rewrite <- (firstn_skipn k l) at 1.
-	rewrite length_app. f_equal. rewrite length_skipn.
-	simpl. lia.
+      * subst h. symmetry. apply LA. lia.
       * assert (k < length h). {
 	  subst h. rewrite length_app.
 	  rewrite firstn_length_le; try lia.
@@ -259,6 +262,7 @@ Proof.
 		 apply Hf in H8; try assumption. lia.
 	      ** rewrite firstn_length_le; lia.
       * unfold h in H3.
+	clear H F L Heqk H0 H1.
 	remember (nth k l 1) as y.
 	generalize dependent l. induction y.
 	-- exists x. rewrite H3.
@@ -273,10 +277,40 @@ Proof.
 	       + simpl. rewrite IHl; try reflexivity.
 		 simpl in H. lia.
 	   }
-	   rewrite (H4 l k).
+	   rewrite (H l k).
 	   ++ rewrite <- Heqy. reflexivity.
 	   ++ lia.
-	--
+	-- intros.
+	   set (j := firstn k l ++ [y] ++ skipn (S k) l).
+	   destruct (IHy j).
+	   ++ unfold j. rewrite LA; lia.
+	   ++ rewrite H3.
+	      assert (firstn k l = firstn k j). {
+		unfold j. Search firstn.
+		replace k with (length (firstn k l) + 0) at 2.
+		- rewrite firstn_app_2. simpl.
+		  rewrite app_nil_r. reflexivity.
+		- rewrite firstn_length_le; lia.
+	      }
+	      rewrite H. do 2 f_equal.
+	      subst j.
+	      rewrite app_assoc. rewrite skipn_app.
+	      assert (S k = length (firstn k l ++ [y])). {
+		rewrite length_app.
+		rewrite firstn_length_le; simpl; lia.
+	      }
+	      rewrite H0 at 2.
+	      rewrite skipn_all. rewrite <- H0.
+	      rewrite sub_diag. reflexivity.
+	   ++ subst j. rewrite app_nth2.
+	      ** rewrite firstn_length_le; try lia.
+		 rewrite sub_diag. reflexivity.
+	      ** rewrite firstn_length_le; lia.
+	   ++ specialize IHl with (repeat max k ++ [y] ++ repeat
+	   ++ exists (S x0). simpl. rewrite H.
+	      subst j.
+	      unfold olist_add. simpl.
+
 	   repeat rewrite H0.
 	   generalize Heqk. clear.
 	   intros. induction l.
