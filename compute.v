@@ -18,6 +18,35 @@ Proof.
   simpl. rewrite IHl. reflexivity.
 Qed.
 
+Theorem olist_add_not_nil max l : olist_add max l <> [].
+Proof.
+  induction l.
+  - simpl. intros. discriminate.
+  - simpl. unfold "<?". destruct (leb_spec0 (S a) max).
+    + intros. discriminate.
+    + remember (olist_add max l) as h. destruct h.
+      * assumption.
+      * discriminate.
+Qed.
+
+Theorem olist_add_m m l n :
+  olist_add (S m) (repeat (S m) n ++ m :: l) = repeat (S m) n ++ olist_add (S m) (m :: l).
+Proof.
+  intros. induction n; try reflexivity.
+  remember (S m) as sm. remember (m :: l) as ml.
+  simpl. unfold "<?".
+  destruct (leb_spec0 (S sm) sm); try lia.
+  rewrite IHn.
+  remember (repeat sm n ++ olist_add sm ml) as h.
+  destruct h.
+  - exfalso. eapply olist_add_not_nil. apply IHn.
+  - f_equal. destruct n.
+    + simpl in *. subst. simpl in IHn. unfold "<?" in IHn.
+      destruct (leb_spec0 (S m) (S m)); try lia.
+      injection IHn. auto.
+    + simpl in Heqh. injection Heqh. auto.
+Qed.
+
 Fixpoint olist max l n :=
   match n with
   | 0 => l
@@ -72,85 +101,7 @@ Fixpoint olist_nth max n :=
   | S n => olist_add max (olist_nth max n)
   end.
 
-Theorem t2 max : forall l, Forall (fun x => x <= max) l ->
-  StronglySorted ge l -> exists n, olist_nth max n = l.
-Proof.
-  assert (IF : forall T (l : list T) k, incl (firstn k l) l). {
-    intros. rewrite <- firstn_skipn with (n := k).
-    apply incl_appl. apply incl_refl.
-  }
-  assert (IS : forall T (l : list T) k, incl (skipn k l) l). {
-    intros. rewrite <- firstn_skipn with (n := k).
-    apply incl_appr. apply incl_refl.
-  }
-  assert (SK : forall l n, n < length l -> skipn n l = nth n l 0 :: skipn (S n) l). {
-    induction l; try (simpl; lia).
-    intros. destruct n; try reflexivity.
-    rewrite skipn_cons.
-    simpl in H. rewrite IHl; try lia.
-    rewrite skipn_cons. reflexivity.
-  }
-  set (
-    ml := fix ml m l :=
-      match l with
-      | [] => 0
-      | h :: t => let x := ml m t in
-	  if m <=? h then S x else x
-      end
-  ).
-  assert (ml_0 : forall l, ml 0 l = length l). {
-    induction l; simpl; auto.
-  }
-  assert (M1 : forall l n m, n <= m -> ml m l <= ml n l). {
-    intros. induction l; auto. simpl.
-    destruct (leb_spec0 m a), (leb_spec0 n a); lia.
-  }
-  assert (ml_app : forall l h m, ml m (l ++ h) = ml m l + ml m h). {
-    intros. induction l; try reflexivity.
-    simpl. destruct (leb_spec0 m a); lia.
-  }
-  assert (M2 : forall l n a, LocallySorted ge (a :: l) -> a < n -> ml n (a :: l) = 0). {
-    induction l; intros.
-    - simpl. destruct (leb_spec0 n a); lia.
-    - simpl. destruct (leb_spec0 n a0); try lia.
-      apply IHl; inversion H;
-	try constructor; try assumption; lia.
-  }
-  assert (M3 : forall l m n, LocallySorted ge l -> n < ml m l -> nth n l 0 >= m). {
-    induction l; intros.
-    - simpl in *. lia.
-    - simpl. destruct n.
-      + simpl in H0. destruct (leb_spec0 m a); try lia.
-	eapply le_trans.
-	* apply IHl.
-	  -- inversion H; [constructor | assumption].
-	  -- apply H0.
-	* inversion H.
-	  -- subst. simpl in *. lia.
-	  -- subst. simpl. assumption.
-      + apply IHl.
-	* inversion H; [constructor | assumption].
-	* simpl in H0. destruct (leb_spec0 m a); lia.
-  }
-  assert (M4 : forall l n m, LocallySorted ge l -> n < length l -> nth n l 0 < m -> ml m l = ml m (firstn n l)). {
-    intros. rewrite <- (firstn_skipn n l) at 1.
-    rewrite ml_app. rewrite <- add_0_r. f_equal.
-    destruct (le_gt_cases (length l) (S n)).
-    - rewrite SK; try assumption.
-      apply M2; try assumption.
-      rewrite <- SK; try assumption.
-  }
-  (*assert (LS : forall l, StronglySorted ge l -> forall n1 n2, n1 < length l -> n2 < length l -> n1 <= n2 -> nth n2 l 0 <= nth n1 l 0). {
-    induction l; intros.
-    - simpl in *. lia.
-    - inversion H. subst. destruct n1, n2; simpl; try lia.
-      + simpl in H1.
-        eapply (Forall_nth (ge a) l) in H6;
-	  try eassumption.
-	lia.
-      + apply IHl; simpl in *; try assumption; lia.
-  }
-  set (mlength := fun m l ml => ml <= length l /\ forall k, k < length l -> nth k l 0 >= m <-> k < ml).
+  (*set (mlength := fun m l ml => ml <= length l /\ forall k, k < length l -> nth k l 0 >= m <-> k < ml).
   assert (ML1 : forall l n m nl ml, mlength n l nl -> mlength m l ml -> n <= m -> ml <= nl). {
     intros. subst mlength. simpl in *. destruct H, H0.
     destruct ml; try lia. apply H2; try lia.
@@ -225,9 +176,172 @@ Proof.
 	      try rewrite length_app; lia.
 	  -- rewrite app_nth1; try lia. apply H4; lia.
   }*)
+
+Theorem t2 max : forall l, Forall (fun x => x <= max) l ->
+  StronglySorted ge l -> exists n, olist_nth max n = l.
+Proof.
+  assert (IF : forall T (l : list T) k, incl (firstn k l) l). {
+    intros. rewrite <- firstn_skipn with (n := k).
+    apply incl_appl. apply incl_refl.
+  }
+  assert (IS : forall T (l : list T) k, incl (skipn k l) l). {
+    intros. rewrite <- firstn_skipn with (n := k).
+    apply incl_appr. apply incl_refl.
+  }
+  assert (SK : forall l n, n < length l -> skipn n l = nth n l 0 :: skipn (S n) l). {
+    induction l; try (simpl; lia).
+    intros. destruct n; try reflexivity.
+    rewrite skipn_cons.
+    simpl in H. rewrite IHl; try lia.
+    rewrite skipn_cons. reflexivity.
+  }
+  assert (FS : forall l n, n < length l -> firstn (S n) l = firstn n l ++ [nth n l 0]). {
+    intros. rewrite firstn_skipn_rev.
+    rewrite <- rev_involutive. f_equal.
+    rewrite rev_app_distr. simpl.
+    rewrite SK; try (rewrite rev_length; lia).
+    rewrite rev_nth; try lia.
+    repeat f_equal; try lia.
+    rewrite skipn_rev. repeat f_equal. lia.
+  }
+  assert (LSr : forall n m, LocallySorted ge (repeat n m)). {
+    intros. induction m; try constructor.
+    simpl. remember (repeat n m) as r. destruct r.
+    - constructor.
+    - constructor; try assumption.
+      destruct m; try discriminate.
+      injection Heqr. lia.
+  }
+  assert (LS : forall l a h, LocallySorted ge (l ++ [a]) -> LocallySorted ge (a :: h) -> LocallySorted ge (l ++ a :: h)). {
+    induction l; intros; try assumption.
+    simpl. destruct l.
+    - simpl. constructor; try assumption.
+      inversion H. assumption.
+    - simpl. constructor.
+      + apply IHl; try assumption. inversion H; assumption.
+      + inversion H. assumption.
+  }
+  assert (LSl : forall l, LocallySorted ge l -> forall n1 n2, n1 < length l -> n2 < length l -> n1 <= n2 -> nth n2 l 0 <= nth n1 l 0). {
+    intros l L.
+    apply Sorted_LocallySorted_iff in L.
+    apply Sorted_StronglySorted in L.
+    2: { unfold Transitive. lia. }
+    induction l; intros.
+    - simpl in *. lia.
+    - inversion L. subst. destruct n1, n2; simpl; try lia.
+      + simpl in H0.
+        eapply (Forall_nth (ge a) l) in H5;
+	  try eassumption.
+	lia.
+      + apply IHl; simpl in *; try assumption; lia.
+  }
+  assert (LSp : forall l a, LocallySorted ge (l ++ [S a]) -> LocallySorted ge (l ++ [a])). {
+    clear. induction l.
+    - intros. constructor.
+    - intros. simpl. destruct l.
+      + constructor; try constructor.
+	inversion H. lia.
+      + simpl. inversion H. subst. apply IHl in H2.
+	constructor; assumption.
+  }
+  assert (LSp2 : forall l b a, a <= b -> LocallySorted ge (l ++ [b]) -> LocallySorted ge (l ++ [a])). {
+    induction b; intros.
+    - replace a with 0; try lia. assumption.
+    - destruct (eq_dec a (S b)).
+      + subst. assumption.
+      + apply IHb; try (apply LSp; assumption).
+	lia.
+  }
+  assert (LSa : forall l h, LocallySorted ge (l ++ h) -> LocallySorted ge h). {
+    intros. induction l; try assumption.
+    inversion H.
+    - simpl in *. apply IHl. inversion H; try constructor.
+      assumption.
+    - apply IHl. inversion H; try constructor. assumption.
+  }
+  assert (LSal : forall l h, LocallySorted ge (l ++ h) -> LocallySorted ge l). {
+    clear. intros. induction l.
+    - constructor.
+    - destruct l; constructor.
+      + apply IHl. simpl in H. inversion H. assumption.
+      + inversion H. assumption.
+  }
+  set (
+    ml := fix ml m l :=
+      match l with
+      | [] => 0
+      | h :: t => let x := ml m t in
+	  if m <=? h then S x else x
+      end
+  ).
+  assert (ml_0 : forall l, ml 0 l = length l). {
+    induction l; simpl; auto.
+  }
+  assert (M1 : forall l n m, n <= m -> ml m l <= ml n l). {
+    intros. induction l; auto. simpl.
+    destruct (leb_spec0 m a), (leb_spec0 n a); lia.
+  }
+  assert (ml_app : forall l h m, ml m (l ++ h) = ml m l + ml m h). {
+    intros. induction l; try reflexivity.
+    simpl. destruct (leb_spec0 m a); lia.
+  }
+  assert (M2 : forall l n a, LocallySorted ge (a :: l) -> a < n -> ml n (a :: l) = 0). {
+    induction l; intros.
+    - simpl. destruct (leb_spec0 n a); lia.
+    - simpl. destruct (leb_spec0 n a0); try lia.
+      apply IHl; inversion H;
+	try constructor; try assumption; lia.
+  }
+  assert (M3 : forall l m n, LocallySorted ge l -> n < ml m l -> nth n l 0 >= m). {
+    induction l; intros.
+    - simpl in *. lia.
+    - simpl. destruct n.
+      + simpl in H0. destruct (leb_spec0 m a); try lia.
+	eapply le_trans.
+	* apply IHl.
+	  -- inversion H; [constructor | assumption].
+	  -- apply H0.
+	* inversion H.
+	  -- subst. simpl in *. lia.
+	  -- subst. simpl. assumption.
+      + apply IHl.
+	* inversion H; [constructor | assumption].
+	* simpl in H0. destruct (leb_spec0 m a); lia.
+  }
+  assert (M4 : forall l n m, LocallySorted ge l -> n < length l -> nth n l 0 < m -> ml m l = ml m (firstn n l)). {
+    intros. rewrite <- (firstn_skipn n l) at 1.
+    rewrite ml_app. rewrite <- add_0_r. f_equal.
+    rewrite SK; try assumption.
+    apply M2; try assumption.
+    rewrite <- SK; try assumption.
+    eapply LSa. rewrite firstn_skipn. assumption.
+  }
+  assert (M5 : forall l a h m, a < m -> ml m (l ++ a :: h) = ml m (l ++ h)). {
+    intros. induction l.
+    - simpl. destruct (leb_spec0 m a); lia.
+    - simpl. destruct (leb_spec0 m a0); lia.
+  }
+  assert (M6 : forall l a h m, a >= m -> ml m (l ++ a :: h) = S (ml m (l ++ h))). {
+    intros. induction l.
+    - simpl. destruct (leb_spec0 m a); lia.
+    - simpl. destruct (leb_spec0 m a0); lia.
+  }
+  assert (M7 : forall l m n, LocallySorted ge l -> n < length l -> n >= ml m l -> nth n l 0 < m). {
+    induction l; intros.
+    - simpl in *. lia.
+    - simpl in *. destruct (leb_spec0 m a).
+      + destruct n; try lia. apply IHl; try lia.
+	inversion H; [constructor | assumption].
+      + destruct n; try lia.
+	assert (0 <= S n); try lia.
+	eapply (LSl (a :: l) _ 0 (S n)) in H2.
+	* simpl in H2. lia.
+	* simpl. lia.
+	* simpl. lia.
+  }
   set (
     f m k :=
-      forall l, Forall (ge max) l ->
+      forall l, LocallySorted ge l -> Forall (ge max) l ->
       (forall i, i <= m -> ml i l = k i) ->
       exists n, olist_nth max n = l
   ).
@@ -235,6 +349,7 @@ Proof.
     P m := forall (k : nat -> nat), f (max - m) k ->
     f (max - m) (fun i => if i =? max - m then S (k i) else k i)
   ).
+
   assert (forall m, P m). {
     subst P. simpl. intros.
     destruct max as [ | max].
@@ -242,76 +357,258 @@ Proof.
       assert (length l = S (k 0)). {
 	rewrite <- ml_0. auto.
       }
-      clear H1. destruct (H (repeat 0 (k 0))).
-      + remember (k 0) as n eqn : E. clear E H2.
+      clear H2. destruct (H (repeat 0 (k 0))).
+      + remember (k 0) as n eqn : E. clear E H3.
+	induction n.
+	* constructor.
+	* simpl. inversion IHn.
+	  -- constructor.
+	  -- assert (a = 0). {
+	       destruct n.
+	       - discriminate.
+	       - simpl in H3. injection H3. lia.
+	     }
+	     constructor; try constructor. lia.
+	  -- constructor.
+	     ++ rewrite H2. assumption.
+	     ++ destruct n; try discriminate.
+		destruct n; try discriminate.
+		simpl in H1. injection H2. lia.
+      + remember (k 0) as n eqn : E. clear E H3.
 	induction n; constructor; [lia | auto].
       + intros. replace i with 0 in *; try lia.
 	rewrite ml_0. apply repeat_length.
       + exists (S x). simpl.
-	rewrite olist_add_0. rewrite H1.
+	rewrite olist_add_0. rewrite H2.
 	rewrite repeat_length. apply nth_ext with 0 0.
 	* simpl. rewrite repeat_length. auto.
 	* intros. replace (nth n l 0) with 0.
 	  -- destruct n; try reflexivity.
 	     simpl. apply nth_repeat.
-	  -- apply (Forall_nth (ge 0) l) with n 0 in H0;
+	  -- apply (Forall_nth (ge 0) l) with n 0 in H1;
 	      try lia.
-	      simpl in H3. rewrite repeat_length in H3.
+	      simpl in H4. rewrite repeat_length in H4.
 	      lia.
-    - induction m.
+    - induction m as [ | m IH].
       + rewrite sub_0_r in *. subst f. simpl. simpl in H.
-	intros.
+	intros l L F Hl.
 	set (h := firstn (k (S max)) l ++ max :: skipn (S (k (S max))) l).
-	assert (length h = length l). {
+	assert (Lh : length h = length l). {
 	  rewrite <- (firstn_skipn (k (S max)) l).
 	  subst h. repeat rewrite length_app. f_equal.
-	  replace (length (max :: skipn (S (k (S max))) l)) with (S (length (skipn (S (k (S max))) l))); try reflexivity.
-	  repeat rewrite length_skipn.
-	  assert (S (k (S max)) <= length l). {
-	    specialize H1 with (S max). simpl in H1.
-	    destruct (eqb_spec max max); try lia. clear e.
-	    rewrite <- H1; try lia. rewrite <- ml_0.
-	    apply M1. lia.
-	  }
-	  lia.
+	  rewrite (SK _ (k (S max))); try reflexivity.
+	  specialize Hl with (S max). simpl in Hl.
+	  destruct (eqb_spec max max); try lia.
+	  unfold "<". rewrite <- Hl; try auto.
+	  rewrite <- ml_0. apply M1. lia.
 	}
-	destruct (H h).
+	assert (Ek : S (k (S max)) = ml (S max) l). {
+	  specialize Hl with (S max). simpl in Hl.
+	  destruct (eqb_spec max max); try lia.
+	}
+	assert (k_le : k (S max) < length l). {
+	  unfold "<". rewrite <- ml_0.
+	  rewrite Ek; try lia.
+	  apply M1. lia.
+	}
+	assert (El : l = firstn (k (S max)) l ++ S max :: skipn (S (k (S max))) l). {
+	  rewrite <- (firstn_skipn (k (S max))) at 1.
+	  f_equal. rewrite SK; try assumption. f_equal.
+	  apply le_antisymm.
+	  - eapply Forall_nth in F; eassumption.
+	  - apply M3; try assumption. lia.
+	}
+	assert (LSh : LocallySorted ge h). {
+	  apply LS.
+	  - apply LSp. rewrite El in L.
+	    replace (firstn (k (S max)) l ++ S max :: skipn (S (k (S max))) l) with ((firstn (k (S max)) l ++ [S max]) ++ skipn (S (k (S max))) l) in L; try (rewrite <- app_assoc; reflexivity).
+	    apply LSal in L; assumption.
+	  - remember (skipn (S (k (S max))) l) as sl.
+	    destruct sl; [constructor | ].
+	    constructor.
+	    + rewrite <- (firstn_skipn (S (k (S max)))) in L.
+	      apply LSa in L. rewrite Heqsl. assumption.
+	    + assert (S max > n). {
+		replace n with (nth 0 (skipn (S (k (S max))) l) 0).
+		- rewrite nth_skipn.
+		  apply M7; try assumption.
+		  + rewrite El. rewrite length_app.
+		    rewrite firstn_length_le; try lia.
+		    simpl. lia.
+		  + lia.
+		- rewrite <- Heqsl. reflexivity.
+	      }
+	      lia.
+	}
+	destruct (H h); try assumption.
 	* subst h. apply Forall_app. split.
 	  -- apply incl_Forall with l; auto.
 	  -- constructor; try lia.
 	     apply incl_Forall with l; auto.
-	* intros. apply H1 in H3.
+	* intros. apply Hl in H0.
 	  destruct (eqb_spec i (S max)).
-	  -- subst h. rewrite ml_app.
-	     rewrite <- (firstn_skipn (k i) l) in H3.
-	     apply succ_inj. rewrite <- H3.
-	     rewrite <- add_1_r. rewrite ml_app.
-	     rewrite <- add_assoc.
-	     f_equal; try (subst; reflexivity).
-	     rewrite <- e.
-	     rewrite SK.
-	     ++
-	* intros. subst h. rewrite ml_app.
-	  apply H1 in H3. destruct (eqb_spec i (S max)).
-	  -- subst. rewrite M2; try lia.
-	     ++ rewrite <- (firstn_skipn (k (S max)) l) in H3.
-		apply succ_inj. rewrite <- H3.
-		rewrite <- add_1_r. rewrite ml_app.
-		f_equal; try lia. rewrite SK.
-		** remember (skipn (S (k (S max))) l) as sk.
-		   simpl.
-		Search skipn.
-	  replace (k i) with (k i + 0); try lia.
-	  apply MLa.
-	* intros. unfold mlength. split.
-	  -- specialize H1 with i. apply H1 in H3.
-	     destruct H3. rewrite H2.
-	     destruct (eqb_spec i (S max)).
-	     ++ subst. lia.
-	     ++ assumption.
-	  -- intros. apply H1 in H3.
-	     destruct (eqb_spec i (S max)).
-	     ++ subst. unfold mlength in H3.
+	  -- apply le_antisymm.
+	     ++ destruct (le_gt_cases (ml i h) (k i));
+		  try assumption.
+		apply M3 in H1; try assumption.
+		destruct (Compare_dec.gt_dec i (nth (k i) h 0)); try lia.
+		exfalso. apply n. clear n H1.
+		unfold h.
+		rewrite app_nth2;
+		  rewrite firstn_length_le; try lia.
+		** subst. rewrite sub_diag. simpl. lia.
+		** subst. lia.
+	     ++ destruct (le_gt_cases (k i) (ml i h));
+		  try assumption.
+		  subst.
+		unfold "<" in H1. remember (k (S max)) as ki.
+		destruct ki; try (subst; lia).
+		apply le_S_n in H1.
+		apply M7 in H1; try assumption; try lia.
+		unfold h in H1. rewrite app_nth1 in H1.
+		--- rewrite nth_firstn in H1.
+		    unfold "<?" in H1. simpl in H1.
+		    destruct (leb_spec0 ki ki); try lia.
+		    clear l0.
+		    destruct (Compare_dec.ge_dec (nth ki l 0) (S max)); try lia.
+		    exfalso. apply n. clear H1 n.
+		    apply M3; try assumption. lia.
+		--- rewrite firstn_length_le; lia.
+	  -- rewrite <- H0, El. unfold h.
+	     repeat rewrite ml_app. f_equal.
+	     assert (forall a (l : list nat), a :: l = [a] ++ l); try reflexivity.
+	     rewrite H1. rewrite ml_app.
+	     rewrite (H1 (S (max))). rewrite ml_app.
+	     f_equal. simpl.
+	     destruct (leb_spec0 i max), (leb_spec0 i (S max)); lia.
+	* exists (S x). simpl. rewrite H0.
+	  unfold h.
+	  assert (firstn (k (S max)) l = repeat (S max) (k (S max))). {
+	    apply nth_ext with 0 0.
+	    - rewrite firstn_length_le; try lia.
+	      symmetry. apply repeat_length.
+	    - intros. rewrite nth_firstn.
+	      rewrite firstn_length_le in H1; try lia.
+	      unfold "<?". destruct (leb_spec0 (S n) (k (S max))); try lia.
+	      rewrite nth_repeat_lt; try lia.
+	      apply le_antisymm.
+	      + eapply Forall_nth in F; try eassumption.
+		lia.
+	      + apply M3; try assumption. lia.
+	  }
+	  rewrite H1. rewrite olist_add_m. rewrite El at 2.
+	  rewrite H1. f_equal. simpl. unfold "<?".
+	  destruct (leb_spec0 (S max) (S max)); try lia.
+	  reflexivity.
+      + unfold f. simpl. intros l L F Hl.
+	unfold f in H. simpl in H.
+	set (p := k (max - m)).
+	assert (Ep : S p = ml (max - m) l). {
+	  specialize Hl with (max - m).
+	  destruct (eqb_spec (max - m) (max - m)); lia.
+	}
+	assert (p_le : p < length l). {
+	  unfold "<". rewrite <- ml_0.
+	  rewrite Ep. apply M1. lia.
+	}
+	generalize (firstn_skipn p l). intros El.
+	rewrite SK in El; try assumption.
+	assert (Forall (gt (max - m)) (skipn (S p) l)). {
+	  apply Forall_nth. intros.
+	  rewrite (nth_indep _ _ 0); try assumption.
+	  clear d. rewrite nth_skipn.
+	  apply M7; try assumption.
+	  - rewrite length_skipn in H0. lia.
+	  - lia.
+	}
+	set (nl := match max - m with 0 => [] | S n => [n] end).
+	set (h := repeat (S max) p ++ nl ++ skipn (S p) l).
+	assert (exists n, olist_nth (S max) n = h). {
+	  apply H.
+	  - remember (max - m) as mm. destruct mm.
+	    + subst nl. subst h.
+	      destruct (eq_dec (S p) (length l)).
+	      * rewrite e. rewrite skipn_all. simpl.
+		rewrite app_nil_r. clear.
+		induction p; try constructor.
+		simpl. remember (repeat (S max) p) as r.
+		destruct r; constructor; try assumption.
+		destruct p; simpl in *; try discriminate.
+		injection Heqr. lia.
+	      * rewrite SK; try lia.
+		apply LS.
+		-- assert (nth (S p) l 0 <= S max). {
+		     eapply Forall_nth in F; try eassumption.
+		     lia.
+		   }
+		generalize H1. clear.
+		remember (nth (S p) l 0) as a. clear.
+		intros. induction p.
+		++ constructor.
+		++ simpl. remember (repeat (S max) p) as r.
+		   destruct r.
+		   ** constructor.
+		      --- constructor.
+		      --- lia.
+		   ** simpl. constructor.
+		      --- assumption.
+		      --- destruct p; try discriminate.
+			  injection Heqr. lia.
+		-- rewrite <- SK; try lia.
+		   rewrite <- (firstn_skipn (S p)) in L.
+		   apply LSa in L. assumption.
+	    + subst h. subst nl. apply LS.
+	      * apply LSp2 with (S max); try lia.
+		replace [S max] with (repeat (S max) 1);
+		  try reflexivity.
+		  rewrite <- repeat_app. apply LSr.
+	      * remember (skipn (S p) l) as s.
+		destruct s; constructor.
+		-- rewrite Heqs.
+		   rewrite <- (firstn_skipn (S p)) in L.
+		   apply LSa in L. assumption.
+		-- inversion H0. lia.
+	  - subst h. apply Forall_app. split.
+	    + clear. induction p.
+	      * simpl. constructor.
+	      * simpl. constructor; try assumption. lia.
+	    + apply Forall_app. split.
+	      * subst nl. remember (max - m) as mm.
+		destruct mm; try constructor; try lia.
+		constructor.
+	      * rewrite <- (firstn_skipn (S p)) in F.
+		apply Forall_app in F. apply F.
+	  - intros.
+	}
+	set (h := repeat (max - m) (S p) ++ skipn (S p) l).
+	assert (exists n, olist_nth (S max) n = h). {
+	  set (h1 := repeat (S max - m) p ++ skipn (S p) l).
+	}
+	assert (nth (S p) l 0 = max - m). {
+	  apply le_antisymm.
+	  - assert (S p >= ml (max - m) l); try lia.
+	    apply M7 in H0.
+	  - assert (nth p l 0 < S (max - m)). {
+	      apply M7; try assumption.
+	    }
+	  - assert (ml (max - m) l > p); try lia.
+	    unfold ">", "<" in H0. rewrite Ep in H0.
+	    apply M7 in H0.
+	    + subst p. lia.
+	}
+	destruct (eq_dec max m).
+	* subst. rewrite sub_diag in *.
+	  specialize Hl with 0. simpl in Hl. subst p.
+	  rewrite sub_diag in *. clear Hl.
+	  rewrite ml_0 in Ep. clear p_le.
+	  rewrite Ep in El. rewrite skipn_all in El.
+	  assert (S m - m = 1); try lia.
+	  rewrite H0 in IH. unfold f in IH. simpl in IH.
+	assert (Forall (gt (nth p l 0)) 
+	remember (nth p l 0) as x. destruct x.
+	*
+	assert (El : l = firstn p l ++ skipn
+	Search firstn skipn.
   }
   2:{ specialize H with max. unfold P in H.
     rewrite sub_diag in H. unfold f in H.
