@@ -350,164 +350,204 @@ Proof.
     f (max - m) (fun i => if i =? max - m then S (k i) else k i)
   ).
 
-  assert (forall m, P m). {
-    subst P f. simpl. intros m k H l L F Hl.
-    set (p := k (max - m)).
-    assert (Ep : S p = ml (max - m) l). {
-      specialize Hl with (max - m).
-      destruct (eqb_spec (max - m) (max - m)); lia.
-    }
-    assert (p_le : p < length l). {
-      unfold "<". rewrite <- ml_0.
-      rewrite Ep. apply M1. lia.
-    }
+  set (Hld l m k := forall i, i <= max - m -> ml i l = if i =? max - m then S (k i) else k i).
+  assert (Ep : forall l m k, Hld l m k -> S (k (max - m)) = ml (max - m) l). {
+    intros l m k Hl. subst Hld. simpl in Hl.
+    specialize Hl with (max - m).
+    destruct (eqb_spec (max - m) (max - m)); lia.
+  }
+  assert (p_le : forall (l : list nat) m k, Hld l m k -> k (max - m) < length l). {
+    intros. unfold "<". rewrite <- ml_0.
+    specialize Ep with l m k. rewrite Ep; try assumption.
+    apply M1. lia.
+  }
+  assert (fle : forall l m k, LocallySorted ge l -> Hld l m k -> forall i, i <= max - m -> Forall (le i) (firstn (k (max - m)) l)). {
+    intros l m k L Hl i Hi. apply Forall_nth. intros j d Hj.
+    rewrite (nth_indep _ _ 0); try assumption.
+    specialize Ep with l m k. apply Ep in Hl as Epa.
+    specialize p_le with l m k. apply p_le in Hl as le_pa.
+    rewrite firstn_length_le in Hj; try lia.
+    rewrite nth_firstn. unfold "<?".
+    destruct (leb_spec0 (S j) (k (max - m))) as [HSj | ]; try lia.
+    unfold le.
+    apply M3; try assumption.
+    eapply (M1 l) in Hi. lia.
+  }
+  assert (FrS : forall l m k, LocallySorted ge l -> Hld l m k -> Forall (gt (max - m)) (skipn (S (k (max - m))) l)). {
+    intros l m k L Hl.
+    apply Forall_nth. intros i d Hi.
+    rewrite (nth_indep _ _ 0); try assumption.
+    rewrite nth_skipn.
+    apply Ep in Hl.
+    apply M7; try assumption; try lia.
+    rewrite length_skipn in Hi. lia.
+  }
+  assert (eh :
+    forall l m k, LocallySorted ge l ->
+    Forall (ge max) l ->
+    f (max - m) k ->
+    (forall i, i <= max - m -> ml i l = if i =? max - m then S (k i) else k i) ->
+      let p := k (max - m) in
+      let pr := match max - m with 0 => [] | S n => [n] end in
+      let h := repeat max p ++ pr ++ skipn (S p) l in
+      exists n, olist_nth max n = h
+  ). {
+    intros l m k L F H Hl. intros.
     generalize (firstn_skipn p l). intros El.
+    generalize (fle _ _ _ L Hl). clear fle. intros fle.
+    generalize (Ep _ _ _ Hl). clear Ep. intros Ep.
+    apply p_le in Hl as p_lea.
+    apply FrS in Hl as FrSa; try assumption.
     rewrite SK in El; try assumption.
-    assert (fle : forall i, i <= max - m -> Forall (le i) (firstn p l)). {
-      intros. apply Forall_nth. intros.
-      rewrite (nth_indep _ _ 0); try assumption.
-      rewrite firstn_length_le in H1; try lia.
-      rewrite nth_firstn.
-      unfold "<?". destruct (leb_spec0 (S i0) p); try lia.
-      unfold le.
-      apply M3; try assumption.
-      eapply (M1 l) in H0. lia.
+    assert (Lh : LocallySorted ge h). {
+      subst h. remember (max - m) as mm. destruct mm.
+      - subst pr. rewrite app_nil_l. subst p.
+	remember (skipn (S (k 0)) l) as s eqn : E. clear E.
+	destruct s.
+	+ rewrite app_nil_r. apply LSr.
+	+ inversion FrSa. lia.
+      - subst pr. apply LS.
+	+ apply LSp2 with max; try lia.
+	  replace [max] with (repeat max 1);
+	    try reflexivity.
+	    rewrite <- repeat_app. apply LSr.
+	+ subst p. remember (skipn (S (k (S mm))) l) as s eqn : E.
+	  destruct s; constructor.
+	  * rewrite E.
+	    rewrite <- (firstn_skipn (S (k (S mm)))) in L.
+	    apply LSa in L. assumption.
+	  * inversion FrSa. lia.
     }
-    assert (FrS : Forall (gt (max - m)) (skipn (S p) l)). {
-      apply Forall_nth. intros.
-      rewrite (nth_indep _ _ 0); try assumption. clear d.
-      rewrite nth_skipn. apply M7; try assumption; try lia.
-      rewrite length_skipn in H0. lia.
-    }
-    set (pr := match max - m with 0 => [] | S n => [n] end).
-    set (h := repeat max p ++ pr ++ skipn (S p) l).
-    assert (eh : exists n, olist_nth max n = h). {
-      assert (Lh : LocallySorted ge h). {
-	subst h.
-        remember (max - m) as mm. destruct mm.
-	- subst pr. rewrite app_nil_l.
-	  remember (skipn (S p) l) as s eqn : E. clear E.
-	  destruct s.
-	  + rewrite app_nil_r. apply LSr.
-	  + inversion FrS. lia.
-	- subst pr. apply LS.
-	  + apply LSp2 with max; try lia.
-	    replace [max] with (repeat max 1);
-	      try reflexivity.
-	      rewrite <- repeat_app. apply LSr.
-	  + remember (skipn (S p) l) as s eqn : E.
-	    destruct s; constructor.
-	    * rewrite E.
-	      rewrite <- (firstn_skipn (S p)) in L.
-	      apply LSa in L. assumption.
-	    * inversion FrS. lia.
-      }
-      apply H; try assumption.
-      - subst h. apply Forall_app. split.
-	+ clear.
-	  induction p; simpl; constructor;
-	    [lia | assumption].
-	+ apply Forall_app. split.
-	  * subst pr. remember (max - m) as mm.
-	    destruct mm; constructor; [lia | constructor].
-	  * rewrite <- (firstn_skipn (S p)) in F.
-	    apply Forall_app in F. apply F.
-      - intros i Hil. apply Hl in Hil as Hi.
-	remember (max - m) as mm. destruct mm.
-	+ subst p pr h.
-	  destruct (eqb_spec i 0); try lia. subst.
-	  remember (skipn (S (k 0)) l) as s eqn : E.
-	  clear E.
-	  destruct s.
-	  -- repeat rewrite app_nil_r in *.
-	     remember (k 0) as x. clear.
-	     induction x; try reflexivity.
-	     simpl. lia.
-	  -- inversion FrS. lia.
-	+ destruct (eqb_spec i (S mm)).
-	  * subst. apply le_antisymm.
-	    -- destruct (le_gt_cases (ml (S mm) h) (k (S mm))) as [C | C]; try assumption.
-		apply M3 in C; try assumption.
-		destruct (Compare_dec.gt_dec (S mm) (nth (k (S mm)) h 0)); try lia.
-		exfalso. apply n. clear n C. unfold h.
-		rewrite app_nth2; rewrite repeat_length;
-		  try lia.
-		subst p. rewrite sub_diag.
-		subst pr. simpl. lia.
-	    -- assert (length l = length h). {
-		 rewrite <- El. subst h.
-		 repeat rewrite length_app.
-		 remember (skipn (S p) l) as s. simpl.
-		 f_equal.
-		 rewrite firstn_length_le; try lia.
-		 symmetry. apply repeat_length.
-	       }
-	       destruct (le_gt_cases (k (S mm)) (ml (S mm) h)) as [C | C]; try assumption.
-		unfold "<" in C. remember (k (S mm)) as ki.
-		destruct ki; try (subst; lia).
-		apply le_S_n in C.
-		apply M7 in C; try assumption; try lia.
-		unfold h in C. rewrite app_nth1 in C.
-		++ rewrite nth_repeat_lt in C; lia.
-		++ rewrite repeat_length. lia.
-	  * subst pr. rewrite <- Hi, <- El. unfold h.
-	    remember (skipn (S p) l) as s.
-	    replace (nth p l 0 :: s) with ([nth p l 0] ++ s); try reflexivity.
-	    repeat rewrite ml_app. f_equal.
-	    -- replace (ml i (firstn p l)) with p.
-	       ++ rewrite Heqmm in *.
-		  generalize F Hil. clear. intros F Hil.
-		  induction p; try reflexivity.
-		  simpl. destruct (leb_spec0 i max); lia.
-	       ++ subst p.
-		  apply fle in Hil.
-		  remember (firstn (k (S mm)) l) as f.
-		  assert (length f = k (S mm)). {
-		    subst f. apply firstn_length_le. lia.
-		  }
-		  generalize H0 Hil. clear. intros.
-		  remember (k (S mm)) as n. clear Heqn.
-		  generalize dependent n.
-		  induction f; intros.
-		  --- simpl in *. lia.
-		  --- simpl. destruct (leb_spec0 i a).
-		      +++ destruct n.
-			  *** simpl in H0. lia.
-			  *** f_equal. apply IHf.
-			      ---- inversion Hil. assumption.
-			      ---- simpl in H0. lia.
-		      +++ inversion Hil. lia.
-	    -- f_equal. simpl.
-	       destruct (leb_spec0 i mm), (leb_spec0 i (nth p l 0)); try lia.
-	       exfalso. apply n0. subst p.
-	       apply M3; try assumption. rewrite Hi.
-	       apply (M1 l) in Hil. lia.
-    }
-    assert (R : olist_add max (repeat max p ++ pr ++ (skipn (S p) l)) = repeat (max - m) (S p) ++ (skipn (S p) l)). {
-      intros.
+    apply H; try assumption.
+    - subst h. apply Forall_app. split.
+      + clear.
+	induction p; simpl; constructor;
+	  [lia | assumption].
+      + apply Forall_app. split.
+	* subst pr. remember (max - m) as mm.
+	  destruct mm; constructor; [lia | constructor].
+	* rewrite <- (firstn_skipn (S p)) in F.
+	  apply Forall_app in F. apply F.
+    - intros i Hil. apply Hl in Hil as Hi.
       remember (max - m) as mm. destruct mm.
-      + simpl in pr. subst pr.
-	rewrite app_nil_l.
-	remember (skipn (S p) l) as s. destruct s.
-	* repeat rewrite app_nil_r.
-	  clear. induction p; try reflexivity.
-	  simpl. unfold "<?".
-	  destruct (leb_spec0 (S max) (max)); try lia.
-	  rewrite IHp. reflexivity.
-	* inversion FrS. lia.
-      + subst pr.
-	remember (skipn (S p) l) as s. simpl.
-	generalize Heqmm. clear. intros.
-	induction p.
-	* simpl. unfold "<?".
-	  destruct (leb_spec0 (S mm) max); try reflexivity. lia.
-	* simpl. unfold "<?". destruct (leb_spec0 (S max) max); try lia.
-	  rewrite IHp. reflexivity.
-    }
-    induction m.
-    - destruct eh as [n Hn].
+      + subst p pr h.
+	destruct (eqb_spec i 0); try lia. subst.
+	remember (skipn (S (k 0)) l) as s eqn : E.
+	clear E.
+	destruct s.
+	-- repeat rewrite app_nil_r in *.
+	   remember (k 0) as x. clear.
+	   induction x; try reflexivity.
+	   simpl. lia.
+	-- inversion FrSa. lia.
+      + destruct (eqb_spec i (S mm)).
+	* subst. apply le_antisymm.
+	  -- destruct (le_gt_cases (ml (S mm) h) (k (S mm))) as [C | C]; try assumption.
+	      apply M3 in C; try assumption.
+	      destruct (Compare_dec.gt_dec (S mm) (nth (k (S mm)) h 0)); try lia.
+	      exfalso. apply n. clear n C. unfold h.
+	      rewrite app_nth2; rewrite repeat_length;
+		try lia.
+	      subst p. rewrite sub_diag.
+	      subst pr. simpl. lia.
+	  -- assert (length l = length h). {
+	       rewrite <- El. subst h.
+	       repeat rewrite length_app.
+	       remember (skipn (S p) l) as s. simpl.
+	       f_equal.
+	       rewrite firstn_length_le; try lia.
+	       symmetry. apply repeat_length.
+	     }
+	     destruct (le_gt_cases (k (S mm)) (ml (S mm) h)) as [C | C]; try assumption.
+	      unfold "<" in C. remember (k (S mm)) as ki.
+	      destruct ki; try (subst; lia).
+	      apply le_S_n in C.
+	      apply M7 in C; try assumption; try lia.
+	      unfold h in C. rewrite app_nth1 in C.
+	      ++ rewrite nth_repeat_lt in C; lia.
+	      ++ rewrite repeat_length. lia.
+	* subst pr. rewrite <- Hi, <- El. unfold h.
+	  remember (skipn (S p) l) as s.
+	  replace (nth p l 0 :: s) with ([nth p l 0] ++ s); try reflexivity.
+	  repeat rewrite ml_app. f_equal.
+	  -- replace (ml i (firstn p l)) with p.
+	     ++ rewrite Heqmm in *.
+		generalize F Hil. clear. intros F Hil.
+		induction p; try reflexivity.
+		simpl. destruct (leb_spec0 i max); lia.
+	     ++ subst p.
+		apply fle in Hil.
+		remember (firstn (k (S mm)) l) as fs.
+		assert (length fs = k (S mm)). {
+		  subst fs. apply firstn_length_le. lia.
+		}
+		generalize H0 Hil. clear. intros.
+		remember (k (S mm)) as n. clear Heqn.
+		generalize dependent n.
+		induction fs; intros.
+		--- simpl in *. lia.
+		--- simpl. destruct (leb_spec0 i a).
+		    +++ destruct n.
+			*** simpl in H0. lia.
+			*** f_equal. apply IHfs.
+			    ---- inversion Hil. assumption.
+			    ---- simpl in H0. lia.
+		    +++ inversion Hil. lia.
+	  -- f_equal. simpl.
+	     destruct (leb_spec0 i mm), (leb_spec0 i (nth p l 0)); try lia.
+	     exfalso. apply n0. subst p.
+	     apply M3; try assumption. rewrite Hi.
+	     apply (M1 l) in Hil. lia.
+  }
+
+  assert (R :
+    forall l m k, LocallySorted ge l ->
+    Forall (ge max) l ->
+    f (max - m) k ->
+    (forall i, i <= max - m -> ml i l = if i =? max - m then S (k i) else k i) ->
+      let p := k (max - m) in
+      let pr := match max - m with 0 => [] | S n => [n] end in
+      let h := repeat max p ++ pr ++ skipn (S p) l in
+    olist_add max (repeat max p ++ pr ++ (skipn (S p) l)) = repeat (max - m) (S p) ++ (skipn (S p) l)
+  ). {
+    intros l m k L F H Hl. intros.
+    generalize (FrS _ _ _ L Hl). clear FrS. intros FrS.
+    generalize (Ep _ _ _ Hl). clear Ep. intros Ep.
+    remember (max - m) as mm. destruct mm.
+    + simpl in pr. subst pr.
+      rewrite app_nil_l. subst p.
+      remember (skipn (S (k 0)) l) as s. destruct s.
+      * repeat rewrite app_nil_r.
+	clear. remember (k 0) as p eqn : E. clear E.
+	induction p; try reflexivity.
+	simpl. unfold "<?".
+	destruct (leb_spec0 (S max) (max)); try lia.
+	rewrite IHp. reflexivity.
+      * inversion FrS. lia.
+    + subst pr.
+      remember (skipn (S p) l) as s. simpl.
+      generalize Heqmm. clear. intros.
+      induction p.
+      * simpl. unfold "<?".
+	destruct (leb_spec0 (S mm) max); try reflexivity. lia.
+      * simpl. unfold "<?". destruct (leb_spec0 (S max) max); try lia.
+	rewrite IHp. reflexivity.
+  }
+
+  assert (forall m, P m). {
+    induction m; intros.
+    - subst P f. simpl. intros k H l L F Hl.
+      generalize (p_le _ _ _ Hl). clear p_le. intros p_le.
+      generalize (eh l 0 k). clear eh. intros eh.
+      generalize (fle _ _ _ L Hl). clear fle. intros fle.
+      generalize (R l 0 k). clear R. intros R.
+      generalize (Ep _ _ _ Hl). clear Ep. intros Ep.
+      rewrite sub_0_r in *.
+      generalize (firstn_skipn (k max) l). intros El.
+      rewrite SK in El; try assumption.
+      destruct eh as [n Hn]; try assumption.
       exists (S n). simpl. rewrite Hn. clear Hn.
-      assert (FR : firstn p l = repeat max p). {
+      assert (FR : firstn (k max) l = repeat max (k max)). {
 	apply nth_ext with 0 0.
 	- rewrite firstn_length_le; try lia.
 	  symmetry. apply repeat_length.
@@ -522,22 +562,150 @@ Proof.
 	      -- rewrite firstn_length_le; lia.
 	    * rewrite firstn_length_le; lia.
       }
-      rewrite <- El. subst h. rewrite R, FR.
-      replace (nth p l 0 :: skipn (S p) l) with ([nth p l 0] ++ skipn (S p) l); try reflexivity.
+      apply R in Hl as Ra; try assumption. clear R.
+      rewrite <- El at 2. rewrite Ra, FR.
+      replace (nth (k max) l 0 :: skipn (S (k max)) l) with ([nth (k max) l 0] ++ skipn (S (k max)) l); try reflexivity.
       rewrite app_assoc. f_equal.
-      replace [nth p l 0] with (repeat max 1).
+      replace [nth (k max) l 0] with (repeat max 1).
       + rewrite <- repeat_app. rewrite add_comm.
-	f_equal. lia.
+	f_equal.
       + simpl. f_equal. apply le_antisymm.
-	* apply M3; try assumption. rewrite sub_0_r in *.
-	  lia.
+	* apply M3; try assumption. lia.
 	* eapply Forall_nth in F; eassumption.
-    - 
+    - subst P. simpl in IHm. simpl. intros k Hk.
+      unfold f. intros l L F Hl.
+      generalize (eh l (S m) k). clear eh. intros eh.
+      set (p := k (max - (S m))).
       set (j := repeat (max - S m) (S p) ++ skipn (S p) l).
       assert (exists n, olist_nth max n = j). {
-	destruct eh as [n Hn]. exists (S n).
-	simpl. rewrite Hn. subst h. subst j. apply R.
+	destruct eh as [n Hn]; try assumption.
+	exists (S n).
+	simpl. rewrite Hn. subst j.
+	subst p. apply R; try assumption.
       }
+
+      remember (ml (max - m) l) as mm. destruct mm.
+      + destruct H. exists x. rewrite H. clear H x.
+	generalize (p_le _ _ _ Hl). clear p_le. intros p_le.
+	generalize (Ep _ _ _ Hl). clear Ep. intros Ep.
+	generalize (firstn_skipn (k (max - S m)) l). intros El.
+	rewrite SK in El; try assumption.
+	rewrite <- El. clear IHm.
+	fold p.
+	subst j. remember (skipn (S p) l) as s.
+	replace (nth p l 0 :: s) with ([nth p l 0] ++ s); try reflexivity.
+	rewrite app_assoc. f_equal.
+	apply nth_ext with 0 0.
+	* rewrite repeat_length, length_app, firstn_length_le; try lia. simpl. lia.
+	* intros. rewrite repeat_length in H.
+	  rewrite nth_repeat_lt; try lia.
+	  destruct (eq_dec n p).
+	  -- subst. rewrite app_nth2; rewrite firstn_length_le; try lia.
+	     rewrite sub_diag. simpl.
+	     apply le_antisymm.
+	     ++ apply M3; try assumption. lia.
+	     ++ assert (p >= ml (max - m) l); try lia.
+		apply M7 in H0; try assumption. lia.
+	  -- rewrite app_nth1; try (rewrite firstn_length_le; lia).
+	     rewrite nth_firstn. unfold "<?".
+	     destruct (leb_spec0 (S n) p); try lia.
+	     apply le_antisymm.
+	     ++ apply M3; try assumption. lia.
+	     ++ assert (n >= ml (max - m) l); try lia.
+		apply M7 in H0; try assumption; lia.
+      + destruct (eq_dec (max - m) 0) as [e | e]. {
+	  assert (eS : max - S m = 0); try lia.
+	  eapply IHm; try assumption.
+	  - subst f. simpl.
+	    intros. apply Hk; try assumption.
+	    intros. apply H2. lia.
+	  - intros. destruct (eqb_spec i (max - m)); try lia.
+	    subst. rewrite e in *. rewrite Hl; try lia.
+	    destruct (eqb_spec 0 (max - S m)); lia.
+	}
+	remember (max - S m) as a eqn : Ea.
+	replace (max - m) with (S a) in *; try lia.
+	destruct H as [n Hn].
+	remember (ml (S a) l) as x.
+	generalize dependent a.
+	induction x; intros; try lia.
+	set (k1 i := if i =? S a then x else ml i l).
+	apply IHm with k1; try assumption.
+	2:{
+	  intros.
+	  destruct (eqb_spec i (S a)).
+	  - subst i k1. simpl.
+	    destruct (eqb_spec a a); lia.
+	  - rewrite Hl; try lia.
+	    subst k1. simpl.
+	    destruct (eqb_spec i a), (eqb_spec i (S a));
+	      try lia.
+	    + rewrite Hl; try lia.
+	      destruct (eqb_spec i a); lia.
+	    + rewrite Hl; try lia.
+	      destruct (eqb_spec i a); lia.
+	}
+	subst f. simpl. intros.
+	destruct IHx.
+	     rewrite nth_repeat_lt; lia.
+	clear eh n j H. subst p.
+	set (k1 i := if i <? S a then ml i l else mm).
+	apply IHm with (k := k1); try assumption.
+	* subst f. simpl.
+	  intros. simpl in Hk. apply Hk; try assumption.
+	  intros. rewrite H1; try lia. subst k1. simpl.
+	  unfold "<?". destruct (leb_spec0 (S i) (S a)); try lia.
+	  rewrite Hl; try lia.
+	  destruct (eqb_spec i a); try lia. subst i.
+	* intros. destruct (eqb_spec i (max - m)).
+	  -- subst k1. simpl.
+	     unfold "<?". destruct (leb_spec0 (S i) (max - m)); try lia.
+	     destruct (eqb_spec i (max - S m)); try lia.
+	     rewrite Heqmm. congruence.
+	  -- subst k1. simpl. unfold "<?".
+	     destruct (leb_spec0 (S i) (max - m)); try lia.
+	     rewrite Hl; try lia. destruct (eqb_spec i (max - S m)); try lia.
+	     subst. assert (S m <= max); try lia.
+	     simpl in l0.
+	     generalize (Ep _ _ _ Hl). intros.
+	     specialize Hl with (max - S m) as A.
+	     subst p. subst.
+
+
+      remember (ml (max - S m) l) as mm. destruct mm.
+      2:{
+	set (k1 i := if i <? max - S m then k i else if i =? max - S m then mm else ml (max - S m) l).
+	apply IHm with (k := k1).
+	- intros. apply H; try assumption.
+	  intros. rewrite H3; try lia.
+	  subst k1. simpl. unfold "<?".
+	  destruct (leb_spec0 (S i) (max - S m)); try lia.
+	  destruct (eqb_spec i (max - S m)); try lia.
+	  subst. lia.
+	- intros. destruct (eqb_spec i (max - m)).
+	  + subst. subst k1. simpl.
+	    unfold "<?".
+	    destruct (leb_spec0 (S (max - m)) (max - S m)); try lia.
+	    destruct (eqb_spec (max - m) (max - S m)).
+	    * rewrite Heqmm. congruence.
+	    * subst p. lia.
+      }
+
+      + set (k1 i := if i <? max - S m then k i else mm).
+	apply IHm with (k := k1).
+	* generalize dependent H.
+	  intros. apply H; try assumption. intros.
+	  rewrite H3; try lia. unfold k1. unfold "<?".
+	  destruct (leb_spec0 (S i) (max - S m)).
+	  -- rewrite Hl; try lia.
+	     destruct (eqb_spec i (max - S m)); try lia.
+	  -- apply succ_inj. rewrite Heqmm.
+	     rewrite Hl; try lia.
+	  destruct (eqb_spec i (max - S m)); try lia.
+      * clear H0 j IHm R eh h. intros.
+	destruct (eqb_spec i (max - m)).
+	-- specialize Hl with i. destruct (eqb_spec i (max - S m)); try lia. subst.
+	rewrite Hl; try lia.
 
 	assert (nth (S p) l 0 = max - m). {
 	  apply le_antisymm.
