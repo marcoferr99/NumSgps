@@ -483,31 +483,26 @@ Proof.
 	       apply M3; try assumption. rewrite Hi.
 	       apply (M1 l) in Hil. lia.
     }
-    assert (forall s, olist_add max (repeat max p ++ pr ++ s) = repeat (max - m) (S p) ++ s). {
-      subst h. destruct max as [ | max].
+    assert (R : olist_add max (repeat max p ++ pr ++ (skipn (S p) l)) = repeat (max - m) (S p) ++ (skipn (S p) l)). {
+      intros.
+      remember (max - m) as mm. destruct mm.
       + simpl in pr. subst pr.
-	remember (skipn (S p) l) as s eqn : E. clear E.
-	destruct s.
-	* repeat rewrite app_nil_r. rewrite olist_add_0.
-	  rewrite repeat_length. rewrite <- El.
-	  rewrite FR. Search repeat.
-	  assert ([nth p l 0] = repeat 0 1). {
-	    simpl. f_equal.
-	    eapply Forall_nth in F; try eassumption.
-	    - apply le_antisymm; [eassumption | lia].
-	  }
-	  rewrite H0. rewrite <- repeat_app.
-	  rewrite add_comm. reflexivity.
+	rewrite app_nil_l.
+	remember (skipn (S p) l) as s. destruct s.
+	* repeat rewrite app_nil_r.
+	  clear. induction p; try reflexivity.
+	  simpl. unfold "<?".
+	  destruct (leb_spec0 (S max) (max)); try lia.
+	  rewrite IHp. reflexivity.
 	* inversion FrS. lia.
-      + simpl in pr. subst pr.
+      + subst pr.
 	remember (skipn (S p) l) as s. simpl.
-	rewrite olist_add_m. rewrite <- El. rewrite FR.
-	f_equal. simpl. unfold "<?".
-	destruct (leb_spec0 (S max) (S max)); try lia.
-	f_equal. apply le_antisymm.
-	* apply M3; try assumption. subst p.
-	  rewrite sub_0_r in *. lia.
-	* eapply Forall_nth in F; eassumption.
+	generalize Heqmm. clear. intros.
+	induction p.
+	* simpl. unfold "<?".
+	  destruct (leb_spec0 (S mm) max); try reflexivity. lia.
+	* simpl. unfold "<?". destruct (leb_spec0 (S max) max); try lia.
+	  rewrite IHp. reflexivity.
     }
     induction m.
     - destruct eh as [n Hn].
@@ -527,38 +522,22 @@ Proof.
 	      -- rewrite firstn_length_le; lia.
 	    * rewrite firstn_length_le; lia.
       }
-      subst h. destruct max as [ | max].
-      + simpl in pr. subst pr.
-	remember (skipn (S p) l) as s eqn : E. clear E.
-	destruct s.
-	* repeat rewrite app_nil_r. rewrite olist_add_0.
-	  rewrite repeat_length. rewrite <- El.
-	  rewrite FR. Search repeat.
-	  assert ([nth p l 0] = repeat 0 1). {
-	    simpl. f_equal.
-	    eapply Forall_nth in F; try eassumption.
-	    - apply le_antisymm; [eassumption | lia].
-	  }
-	  rewrite H0. rewrite <- repeat_app.
-	  rewrite add_comm. reflexivity.
-	* inversion FrS. lia.
-      + simpl in pr. subst pr.
-	remember (skipn (S p) l) as s. simpl.
-	rewrite olist_add_m. rewrite <- El. rewrite FR.
-	f_equal. simpl. unfold "<?".
-	destruct (leb_spec0 (S max) (S max)); try lia.
-	f_equal. apply le_antisymm.
-	* apply M3; try assumption. subst p.
-	  rewrite sub_0_r in *. lia.
+      rewrite <- El. subst h. rewrite R, FR.
+      replace (nth p l 0 :: skipn (S p) l) with ([nth p l 0] ++ skipn (S p) l); try reflexivity.
+      rewrite app_assoc. f_equal.
+      replace [nth p l 0] with (repeat max 1).
+      + rewrite <- repeat_app. rewrite add_comm.
+	f_equal. lia.
+      + simpl. f_equal. apply le_antisymm.
+	* apply M3; try assumption. rewrite sub_0_r in *.
+	  lia.
 	* eapply Forall_nth in F; eassumption.
-    - simpl in IHm.
-
-
-      + set (j := repeat (max - S m) (S p) ++ skipn (S p) l).
-	assert (exists n, olist_nth max n = j). {
-	  clear IHm. destruct eh as [n Hn]. exists (S n).
-	  simpl. rewrite Hn. subst h.
-	}
+    - 
+      set (j := repeat (max - S m) (S p) ++ skipn (S p) l).
+      assert (exists n, olist_nth max n = j). {
+	destruct eh as [n Hn]. exists (S n).
+	simpl. rewrite Hn. subst h. subst j. apply R.
+      }
 
 	assert (nth (S p) l 0 = max - m). {
 	  apply le_antisymm.
