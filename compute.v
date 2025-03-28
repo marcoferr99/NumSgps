@@ -1,36 +1,25 @@
-(*From Coq Require Import Lia Mergesort Permutation Sorted.*)
-From Coq Require Import Lia Sorted.
+From Coq Require Import Lia Mergesort Permutation Sorted.
 Require Export def.
  
 
-Module ordered_list.
+Section max.
+  Context (max : nat).
+  Local Notation Forall_max := (Forall (ge max)).
+  Local Notation sorted := (LocallySorted ge).
+  Local Notation nth n l := (nth n l 0).
 
 (** Increase the first number in the list [l] that is less than [max] and set
     all the previous elements to that same (increased) value. *)
 
-Fixpoint next max l :=
-  match l with
-  | [] => [0]
-  | h :: t => if h <? max then S h :: t else
-      match next max t with
-      | [] => []
-      | h :: t => h :: h :: t
-      end
-  end.
-
-Theorem next_0 l : next 0 l = repeat 0 (S (length l)).
-Proof.
-  induction l; try reflexivity.
-  simpl. rewrite IHl. reflexivity.
-Qed.
-
-
-Section ordered_list.
-  Context (max : nat).
-  Local Notation next := (next max).
-  Local Notation Forall_max := (Forall (ge max)).
-  Local Notation sorted := (LocallySorted ge).
-  Local Notation nth n l := (nth n l 0).
+  Fixpoint next l :=
+    match l with
+    | [] => [0]
+    | h :: t => if h <? max then S h :: t else
+	match next t with
+	| [] => []
+	| h :: t => h :: h :: t
+	end
+    end.
 
   Theorem next_not_nil l : next l <> [].
   Proof.
@@ -87,17 +76,6 @@ Section ordered_list.
       simpl in Hn. rewrite IH; try lia.
       rewrite skipn_cons. reflexivity.
     }
-    assert (firstn_succ : forall l n, n < length l ->
-      firstn (S n) l = firstn n l ++ [nth n l]
-    ). {
-      intros. rewrite firstn_skipn_rev.
-      rewrite <- rev_involutive. f_equal.
-      rewrite rev_app_distr. simpl.
-      rewrite skipn_nth; try (rewrite length_rev; lia).
-      rewrite rev_nth; try lia.
-      repeat f_equal; try lia.
-      rewrite skipn_rev. repeat f_equal. lia.
-    }
     assert (repeat_sorted :
       forall n m, sorted (repeat n m)
     ). {
@@ -152,14 +130,6 @@ Section ordered_list.
       inversion H; apply IHl;
 	inversion H; try constructor; assumption.
     }
-    assert (sorted_app_l :
-      forall l h, sorted (l ++ h) -> sorted l
-    ). {
-      clear. intros. induction l; try constructor.
-      destruct l; constructor.
-      - apply IHl. simpl in H. inversion H. assumption.
-      - inversion H. assumption.
-    }
 
     set (
       ml := fix ml m l :=
@@ -183,15 +153,6 @@ Section ordered_list.
     ). {
       intros. induction l; try reflexivity.
       simpl. destruct (leb_spec m a); lia.
-    }
-    assert (ml_lt_0 :
-      forall l n a, sorted (a :: l) -> a < n -> ml n (a :: l) = 0
-    ). {
-      induction l as [ | h t IH]; intros; simpl.
-      - destruct (leb_spec n a); lia.
-      - destruct (leb_spec n a); try lia.
-	apply IH; inversion H;
-	  try constructor; try assumption; lia.
     }
     assert (ml_nth_ge : forall l m n, sorted l ->
       n < ml m l -> nth n l >= m
@@ -473,45 +434,6 @@ Section ordered_list.
 	+ rewrite e in *.
 	  replace (max - S m) with 0 in *; try lia.
 	  eapply IHm; eassumption.
-	(*generalize (GR l a k). intros R.
-	set (p := k a).
-	set (j := repeat a (S p) ++ skipn (S p) l).
-	assert (exists n, olist_nth max n = j). {
-	  destruct eha as [n Hn]; try assumption.
-	  exists (S n).
-	  simpl. rewrite Hn. subst j.
-	  subst p. apply R; try assumption.
-	}*)
-
-	(*remember (ml (max - m) l) as mm. destruct mm.
-	+ destruct H. exists x. rewrite H. clear H x.
-	  generalize (p_le _ _ _ Hl). clear p_le. intros p_le.
-	  generalize (Ep _ _ _ Hl). clear Ep. intros Ep.
-	  generalize (firstn_skipn (k (max - S m)) l). intros El.
-	  rewrite SK in El; try assumption.
-	  rewrite <- El. clear IHm.
-	  fold p.
-	  subst j. remember (skipn (S p) l) as s.
-	  replace (nth p l 0 :: s) with ([nth p l 0] ++ s); try reflexivity.
-	  rewrite app_assoc. f_equal.
-	  apply nth_ext with 0 0.
-	  * rewrite repeat_length, length_app, firstn_length_le; try lia. simpl. lia.
-	  * intros. rewrite repeat_length in H.
-	    rewrite nth_repeat_lt; try lia.
-	    destruct (eq_dec n p).
-	    -- subst. rewrite app_nth2; rewrite firstn_length_le; try lia.
-	       rewrite sub_diag. simpl.
-	       apply le_antisymm.
-	       ++ apply M3; try assumption. lia.
-	       ++ assert (p >= ml (max - m) l); try lia.
-		  apply M7 in H0; try assumption. lia.
-	    -- rewrite app_nth1; try (rewrite firstn_length_le; lia).
-	       rewrite nth_firstn. unfold "<?".
-	       destruct (leb_spec0 (S n) p); try lia.
-	       apply le_antisymm.
-	       ++ apply M3; try assumption. lia.
-	       ++ assert (n >= ml (max - m) l); try lia.
-		  apply M7 in H0; try assumption; lia.*)
 	+ remember (max - S m) as a eqn : Ea.
 	  replace (max - m) with (S a) in *; try lia.
 	  assert (
@@ -568,68 +490,129 @@ Section ordered_list.
 	subst. rewrite ml_0. rewrite <- Heqln. reflexivity.
   Qed.
 
-Compute olist_nth 2 4150.
-Definition n1 max min := max - min.
+  Theorem nh_Forall n : Forall_max (nh n).
+  Proof.
+    induction n; [constructor | ].
+    apply next_Forall. assumption.
+  Qed.
 
-Fixpoint n2 max n min :=
-  match n with
-  | 0 => 0
-  | S n => 
+End max.
 
-0 1 2 00 10 11 20 21 22 000 100 110 111 200 210 211 220 221 222
+Section generators.
+  Context (gen : list nat).
+  Local Notation nth n l := (nth n l 0).
+  Local Notation nh := (nh (length gen - 1)).
 
-Theorem t1 max 
-Compute olist_nth 2 6.
-Compute olist_nth 2 12.
+  Definition nth_sum n := sum (fun i => nth i gen) (nh n).
 
-Theorem olist_all max :
-  forall l, LocallySorted (fun x y => x >= y) l ->
-  exists n, olist_nth max n = l.
-Proof.
-  induction l; intros.
-  - exists 0. reflexivity.
-  - destruct IHl as [m Hm].
-    + inversion H; try constructor. assumption.
-    + set (x := olist_nth max (S m)).
-      simpl in x. unfold olist_add in x.
-Admitted.
+  Theorem nth_sum_in A `{numerical_semigroup A} :
+    generator A (fun x => List.In x gen) ->
+    forall n, A (nth_sum n).
+  Proof.
+    intros G n.
+    destruct (eq_dec (length gen) 0) as [l0 | l0].
+    - replace (nth_sum n) with 0; try apply ns_zero.
+      unfold nth_sum.
+      apply length_zero_iff_nil in l0. subst. simpl.
+      remember (compute.nh 0 n) as ls eqn : E. clear E.
+      induction ls; try reflexivity.
+      simpl. destruct a; rewrite add_0_l; assumption.
+    - unfold nth_sum.
+      generalize (nh_Forall (length gen - 1) n). intros F.
+      remember (nh n) as ls eqn : E.
+      remember (length ls) as ln eqn : En. clear E.
+      generalize dependent ls.
+      induction ln as [ | ln IH]; intros.
+      + symmetry in En. apply length_zero_iff_nil in En.
+	subst. apply ns_zero.
+      + intros. destruct ls; try discriminate.
+	simpl. apply ns_closed.
+	* destruct G as [G _]. unfold Included, In in G.
+	  apply G. apply nth_In. inversion F. subst. lia.
+	* apply IH; auto. inversion F. assumption.
+  Qed.
 
-Theorem olist_nth_le max n :
-  Forall (fun x => x <= max) (olist_nth max n).
-Proof.
-  induction n; [constructor | ].
-  apply olist_add_le. assumption.
-Qed.
+  Fixpoint nth_inv l x :=
+    match l with
+    | [] => 0
+    | h :: t => if h =? x then 0 else S (nth_inv t x)
+    end.
 
-Definition nth_sum l n :=
-  sum (fun i => nth i l 0) (olist_nth (length l - 1) n).
+  Theorem nth_inv_lt l x : List.In x l ->
+    nth_inv l x < length l.
+  Proof.
+    induction l; try contradiction.
+    simpl. intros I. destruct (eqb_spec a x); try lia.
+    apply Arith_base.lt_n_S_stt. intuition.
+  Qed.
+  
+  Theorem nth_nth_inv l x : List.In x l ->
+    nth (nth_inv l x) l = x.
+  Proof.
+    induction l; try contradiction.
+    intros I. simpl.
+    destruct (eqb_spec a x); try assumption.
+    simpl in I. intuition.
+  Qed.
 
-Theorem nth_sum_in A `{numerical_semigroup A} l :
-  generator A (fun x => List.In x l) ->
-  forall n, A (nth_sum l n).
-Proof.
-  intros G n.
-  destruct (eq_dec (length l) 0) as [l0 | l0].
-  - apply length_zero_iff_nil in l0. subst.
-    replace (nth_sum [] n) with 0; try apply ns_zero.
-    unfold nth_sum. simpl.
-    remember (olist_nth 0 n) as ls eqn : E.
-    clear E. induction ls; try reflexivity.
-    simpl. destruct a; rewrite add_0_l; assumption.
-  - unfold nth_sum.
-    generalize (olist_nth_le (length l - 1) n). intros F.
-    remember (olist_nth (length l - 1) n) as ls eqn : E.
-    remember (length ls) as ln eqn : En. clear E.
-    generalize dependent ls. induction ln as [ | ln IH].
-    + intros.
-      symmetry in En. apply length_zero_iff_nil in En.
-      subst. apply ns_zero.
-    + intros. destruct ls; try discriminate.
-      simpl. apply ns_closed.
-      * destruct G as [G _]. unfold Included, In in G.
-	apply G. apply nth_In. inversion F. subst. lia.
-      * apply IH; auto. inversion F. assumption.
-Qed.
+  Theorem Forall_repeat {T} (P : T -> Prop) x n : P x ->
+    Forall P (repeat x n).
+  Proof. intros. induction n; constructor; assumption. Qed.
+
+  Theorem LocallySorted_rev {T} (P : T -> T -> Prop) l :
+    LocallySorted P l ->
+    LocallySorted (fun x y => P y x) (rev l).
+  Proof.
+    intros L. induction l; try constructor.
+    simpl. remember (rev l) as r.
+    generalize dependent l.
+    induction r; intros; try constructor.
+    simpl. destruct r.
+    - simpl. constructor; try constructor.
+      rewrite <- rev_involutive in L. simpl in L.
+      rewrite <- Heqr in L. simpl in L. inversion L.
+      assumption.
+    - simpl. constructor.
+      + remember (rev l) as rl.
+	destruct rl; try discriminate.
+	apply IHr with (rev rl).
+	* injection Heqr. intros. rewrite <- H. simpl.
+
+  Theorem nth_sum_all A `{numerical_semigroup A} :
+    generator A (fun x => List.In x gen) ->
+    forall a, A a -> exists n, nth_sum n = a.
+  Proof.
+    intros [_ G] a Aa.
+    destruct (G a Aa) as [r x k Hr].
+    set (l := flat_map (fun i => repeat (nth_inv gen (x i)) (k i)) (seq 0 r)).
+    set (ol := rev (NatSort.sort l)).
+    destruct (nh_all (length gen - 1) ol).
+    - subst ol. apply Forall_rev.
+      generalize (NatSort.Permuted_sort l). intros P.
+      assert (F : Forall (ge (length gen - 1)) l). {
+	unfold l. apply Forall_flat_map.
+	generalize dependent Hr. clear.
+	remember (seq 0 r) as s eqn : Es.
+	assert (Forall (gt r) s). {
+	  subst s. induction r; [constructor | ].
+	  rewrite seq_S. apply Forall_app. split.
+	  - apply Forall_nth. intros.
+	    eapply Forall_nth in IHr; try eassumption.
+	    eapply le_trans; try eassumption. lia.
+	  - constructor; try constructor.
+	}
+	clear Es. intros Hr. generalize dependent s.
+	induction s; [constructor | ].
+	constructor.
+	- apply Forall_repeat.
+	  assert (nth_inv gen (x a) < length gen); try lia.
+	  apply nth_inv_lt. apply Hr.
+	  inversion H. lia.
+	- apply IHs. inversion H. assumption.
+      }
+      eapply Permutation_Forall in P.
+      destruct P; try eassumption; constructor; assumption.
+    - Search LocallySorted.
 
 Fixpoint list_min l :=
   match l with
@@ -715,21 +698,3 @@ Proof.
       *
 	-- unfold List.In.
 Abort.
-    assert (M4 : forall l n m, sorted l -> n < length l -> nth n l 0 < m -> ml m l = ml m (firstn n l)). {
-      intros. rewrite <- (firstn_skipn n l) at 1.
-      rewrite ml_app. rewrite <- add_0_r. f_equal.
-      rewrite SK; try assumption.
-      apply M2; try assumption.
-      rewrite <- SK; try assumption.
-      eapply LSa. rewrite firstn_skipn. assumption.
-    }
-    assert (M5 : forall l a h m, a < m -> ml m (l ++ a :: h) = ml m (l ++ h)). {
-      intros. induction l.
-      - simpl. destruct (leb_spec0 m a); lia.
-      - simpl. destruct (leb_spec0 m a0); lia.
-    }
-    assert (M6 : forall l a h m, a >= m -> ml m (l ++ a :: h) = S (ml m (l ++ h))). {
-      intros. induction l.
-      - simpl. destruct (leb_spec0 m a); lia.
-      - simpl. destruct (leb_spec0 m a0); lia.
-    }
