@@ -116,7 +116,7 @@ Proof.
   apply fold_right_sum.
 Qed.
 
-Theorem sum_permutation {T} f (l1 l2 : list T) :
+Theorem sum_Permutation {T} f (l1 l2 : list T) :
   Permutation l1 l2 -> sum f l1 = sum f l2.
 Proof.
   intros P. induction P using Permutation_ind_bis.
@@ -124,4 +124,11 @@ Proof.
   - simpl. rewrite IHP. reflexivity.
   - simpl. rewrite IHP. lia.
   - rewrite IHP1. assumption.
+Qed.
+
+Theorem sum_flat_map {T} (f : T -> nat) g (l : list T) :
+  sum f (flat_map g l) = sum (fun x => sum f (g x)) l.
+Proof.
+  induction l; try reflexivity.
+  simpl. rewrite sum_app. auto.
 Qed.

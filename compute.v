@@ -1,4 +1,4 @@
-From Coq Require Import Lia Mergesort Permutation Sorted.
+From Coq Require Import FunctionalExtensionality Lia Mergesort Permutation Sorted.
 Require Export def.
  
 
@@ -563,20 +563,24 @@ Section generators.
     LocallySorted P l ->
     LocallySorted (fun x y => P y x) (rev l).
   Proof.
+    assert (
+      forall P (l : list T) a h,
+      LocallySorted P (l ++ [a]) ->
+      LocallySorted P (a :: h) ->
+      LocallySorted P (l ++ a :: h)
+    ). {
+      clear. induction l; intros; try assumption.
+      simpl. destruct l; simpl; constructor;
+	try assumption; try (inversion H; assumption).
+	apply IHl; try assumption. inversion H. assumption.
+    }
     intros L. induction l; try constructor.
-    simpl. remember (rev l) as r.
-    generalize dependent l.
-    induction r; intros; try constructor.
-    simpl. destruct r.
-    - simpl. constructor; try constructor.
-      rewrite <- rev_involutive in L. simpl in L.
-      rewrite <- Heqr in L. simpl in L. inversion L.
-      assumption.
-    - simpl. constructor.
-      + remember (rev l) as rl.
-	destruct rl; try discriminate.
-	apply IHr with (rev rl).
-	* injection Heqr. intros. rewrite <- H. simpl.
+    destruct l as [ | h t]; [constructor | ]. simpl.
+    rewrite <- app_assoc. apply H.
+    - apply IHl. inversion L. assumption.
+    - inversion L. subst.
+      constructor; [constructor | assumption].
+  Qed.
 
   Theorem nth_sum_all A `{numerical_semigroup A} :
     generator A (fun x => List.In x gen) ->
@@ -586,7 +590,7 @@ Section generators.
     destruct (G a Aa) as [r x k Hr].
     set (l := flat_map (fun i => repeat (nth_inv gen (x i)) (k i)) (seq 0 r)).
     set (ol := rev (NatSort.sort l)).
-    destruct (nh_all (length gen - 1) ol).
+    destruct (nh_all (length gen - 1) ol) as [n Hn].
     - subst ol. apply Forall_rev.
       generalize (NatSort.Permuted_sort l). intros P.
       assert (F : Forall (ge (length gen - 1)) l). {
@@ -612,7 +616,33 @@ Section generators.
       }
       eapply Permutation_Forall in P.
       destruct P; try eassumption; constructor; assumption.
-    - Search LocallySorted.
+    - subst ol. apply LocallySorted_rev. clear.
+      generalize (NatSort.LocallySorted_sort l). intros L.
+      unfold is_true in L. fold leb in L.
+      remember (NatSort.sort l) as h eqn : E. clear E.
+      induction h; [constructor | ].
+      destruct h; constructor.
+      + apply IHh. inversion L. assumption.
+      + inversion L. subst.
+	destruct (leb_spec a n); lia.
+    - exists n. unfold nth_sum. rewrite Hn. clear n Hn.
+      rewrite (sum_Permutation _ _ l).
+      + subst l. rewrite sum_flat_map.
+	clear Aa. induction r; try reflexivity.
+	rewrite seq_S. repeat rewrite sum_app. f_equal.
+	* apply IHr. clear IHr. intros. apply Hr. lia.
+	* clear IHr. simpl.
+	remember (k r) as kr eqn : E. clear E.
+	generalize Hr. clear. intros.
+	induction kr; try reflexivity.
+	simpl. rewrite nth_nth_inv; auto.
+	f_equal. f_equal. repeat rewrite add_0_r in IHkr.
+	assumption.
+      + subst ol. eapply Permutation_trans.
+	* symmetry. apply Permutation_rev.
+	* symmetry. apply NatSort.Permuted_sort.
+  Qed.
+
 
 Fixpoint list_min l :=
   match l with
