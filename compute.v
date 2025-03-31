@@ -58,6 +58,34 @@ Section max.
 	apply IH in Ft. inversion Ft. assumption.
   Qed.
 
+  Theorem next_sorted l :
+    sorted l -> sorted (next l).
+  Proof.
+    intros L. induction l; simpl; [constructor | ].
+    destruct (ltb_spec a max).
+    - destruct l; constructor; inversion L; try assumption.
+      lia.
+    - remember (next l) as nl.
+      destruct nl; constructor; try lia.
+      apply IHl. inversion L; try constructor.
+      assumption.
+  Qed.
+
+  Theorem next_length l : length (next l) = length l \/
+    length (next l) = S (length l).
+  Proof.
+    intros. induction l; simpl; [intuition | ].
+    destruct (ltb_spec a max); simpl; [intuition | ].
+    remember (next l) as nl eqn : E. destruct nl.
+    - exfalso. eapply next_not_nil. eauto.
+    - rewrite E in *. simpl. intuition.
+  Qed.
+
+  Theorem next_length_le l : length l <= length (next l).
+  Proof.
+    generalize (next_length l). intros. intuition.
+  Qed.
+
   Fixpoint nh n :=
     match n with
     | 0 => []
@@ -490,10 +518,26 @@ Section max.
 	subst. rewrite ml_0. rewrite <- Heqln. reflexivity.
   Qed.
 
+  Theorem nh_le_length m n :
+    m <= n -> length (nh m) <= length (nh n).
+  Proof.
+    intros. induction n.
+    - destruct m; lia.
+    - destruct (eq_dec m (S n)).
+      + subst. lia.
+      + simpl. rewrite <- next_length_le. intuition lia.
+  Qed.
+
   Theorem nh_Forall n : Forall_max (nh n).
   Proof.
     induction n; [constructor | ].
     apply next_Forall. assumption.
+  Qed.
+
+  Theorem nh_sorted n : sorted (nh n).
+  Proof.
+    induction n; [constructor | ].
+    simpl. apply next_sorted. assumption.
   Qed.
 
 End max.
@@ -643,13 +687,290 @@ Section generators.
 	* symmetry. apply NatSort.Permuted_sort.
   Qed.
 
+  Fixpoint list_min l :=
+    match l with
+    | [] => 0
+    | [x] => x
+    | h :: t => Nat.min h (list_min t)
+    end.
 
-Fixpoint list_min l :=
-  match l with
-  | [] => 0
-  | [x] => x
-  | h :: t => Nat.min h (list_min t)
-  end.
+  Theorem list_min_le l x : List.In x l ->
+    list_min l <= x.
+  Proof.
+    intros. induction l.
+    - simpl. lia.
+    - simpl. destruct l.
+      + simpl in *. intuition lia.
+      + inversion H.
+	* rewrite le_min_l. lia.
+	* rewrite le_min_r. auto.
+  Qed.
+
+  Theorem nth_sum_le n :
+    nth_sum n >= (length (nh n)) * list_min gen.
+  Proof.
+    destruct (eq_dec (length gen) 0) as [ | e]. {
+      apply length_zero_iff_nil in e.
+      rewrite e. simpl. lia.
+    }
+    unfold nth_sum. remember (nh n) as h eqn : E.
+    generalize dependent n.
+    induction h; intros; simpl; try lia.
+    eapply le_trans.
+    - apply add_le_mono_l.
+      destruct (nh_all (length gen - 1) h).
+      + destruct (nh_Forall (length gen - 1) n);
+	  try discriminate.
+	  injection E. intros. subst. assumption.
+      + destruct (nh_sorted (length gen - 1) n);
+	  try discriminate.
+	* injection E. intros. subst. constructor.
+	* injection E. intros. subst. assumption.
+      + eapply IHh. eauto.
+    - apply add_le_mono_r. apply list_min_le.
+      apply nth_In.
+      generalize (nh_Forall (length gen - 1) n). intros.
+      rewrite <- E in H. inversion H. subst. lia.
+  Qed.
+
+  Theorem nth_sum_all_le A `{numerical_semigroup A} :
+    generator A (fun x => List.In x gen) ->
+    forall m a, A a -> a < (length (nh m)) * list_min gen ->
+    exists n, n < m /\ nth_sum n = a.
+  Proof.
+    intros.
+    destruct (nth_sum_all A H0 a); try assumption.
+    exists x. split; try assumption. subst.
+    destruct (ltb_spec x m); try assumption.
+    apply Arith_base.lt_not_le_stt in H2.
+    exfalso. apply H2.
+    eapply le_trans. 2:{ apply nth_sum_le. }
+    apply mul_le_mono_r. apply nh_le_length. lia.
+  Qed.
+
+
+  Fixpoint nth_sum_list_aux n :=
+    match n with
+    | 0 => []
+    | S n => nth_sum n :: nth_sum_list_aux n
+    end.
+
+  Fixpoint sorted_nodup l :=
+    match l with
+    | [] => []
+    | x :: t =>
+	match t with
+	| [] => [x]
+	| y :: s => if x =? y then sorted_nodup t else
+	   x :: sorted_nodup t
+        end
+    end.
+
+  Theorem sorted_nodup_In l a : List.In a l ->
+    List.In a (sorted_nodup l).
+  Proof.
+    intros L. induction l; [inversion L | ].
+    simpl in *. destruct l.
+    - constructor. intuition. inversion H.
+    - destruct (eqb_spec a0 n).
+      + subst. apply IHl. intuition.
+	subst. constructor. reflexivity.
+      + simpl. intuition.
+  Qed.
+
+  Definition nth_sum_list n :=
+    sorted_nodup (NatSort.sort (nth_sum_list_aux n)).
+
+  Definition nth_limit n := length (nh n) * list_min (gen).
+
+  Theorem nth_sum_list_all A `{numerical_semigroup A} n :
+    generator A (fun x => List.In x gen) ->
+    forall a, A a -> a < nth_limit n ->
+    List.In a (nth_sum_list n).
+  Proof.
+    intros.
+    destruct (nth_sum_all_le _ H0 n a); try assumption.
+    destruct H3. subst.
+    generalize H3. clear. intros.
+    unfold nth_sum_list. apply sorted_nodup_In.
+    eapply Permutation_in; try apply NatSort.Permuted_sort.
+    generalize dependent x. intros. induction n.
+    - simpl. replace x with 0; try lia.
+    - simpl. destruct (eq_dec x n).
+      + subst. left. reflexivity.
+      + right. apply IHn; try lia.
+  Qed.
+
+  Definition nth_sum_list2 n :=
+    filter (fun x => x <? nth_limit n) (nth_sum_list n).
+
+  Theorem nth_sum_list2_all A `{numerical_semigroup A} n :
+    generator A (fun x => List.In x gen) ->
+    forall a, A a -> Exists (le a) (nth_sum_list2 n) ->
+    List.In a (nth_sum_list2 n).
+  Proof.
+    intros. unfold nth_sum_list2 in *.
+    apply filter_In. apply Exists_exists in H2.
+    destruct H2. destruct H2.
+    apply filter_In in H2. destruct H2.
+    destruct (ltb_spec x (nth_limit n)); try discriminate.
+    clear H4. unfold le in H3.
+    split.
+    - eapply nth_sum_list_all; try eassumption. lia.
+    - destruct (ltb_spec a (nth_limit n)); try reflexivity.
+      lia.
+  Qed.
+
+  Fixpoint list_eq l m :=
+    match l, m with
+    | [], [] => true
+    | hl :: tl, hm :: tm => if hl =? hm then list_eq tl tm else false
+    | _, _ => false
+    end.
+
+  Theorem list_eq_iff l m : list_eq l m = true <-> l = m.
+  Proof.
+    split; intros.
+    - generalize dependent m. induction l; simpl in *.
+      + destruct m; [reflexivity | discriminate].
+      + destruct m; try discriminate.
+	intros. destruct (eqb_spec a n); try lia.
+	subst. f_equal. apply IHl. assumption.
+    - generalize dependent m. induction l; simpl; intros.
+      + destruct m; try discriminate. reflexivity.
+      + destruct m; try discriminate.
+	destruct (eqb_spec a n).
+	* apply IHl. injection H. auto.
+	* injection H. intros. contradiction.
+  Qed.
+
+  Definition is_seq l n :=
+    match n, l with
+    | 0, [] => true
+    | _, h :: t => list_eq l (seq h n)
+    | S n, [] => false
+    end.
+
+  Theorem is_seq_th l n :
+    is_seq l n = true <-> exists a, seq a n = l.
+  Proof.
+    split; intros.
+    - destruct l, n; simpl in *; try discriminate.
+      + exists 0. reflexivity.
+      + destruct (eqb_spec n0 n0); try lia.
+	apply list_eq_iff in H. exists n0.
+	f_equal. auto.
+    - destruct H.
+      destruct l, n; simpl in *; try discriminate; try reflexivity.
+      destruct (eqb_spec n0 n0); try lia.
+      apply list_eq_iff. injection H. intros. subst.
+      reflexivity.
+  Qed.
+
+  Fixpoint find_seq l n :=
+    match l with
+    | [] => None
+    | h :: t => if list_eq l (seq h n) then Some h
+	else find_seq t n
+    end.
+
+  Theorem find_seq_th l n p : find_seq l n = Some p ->
+    exists h t, l = h ++ seq p n ++ t.
+  Proof.
+    intros. induction l.
+    - simpl in *. discriminate.
+    - simpl in H. remember (seq a n) as sq.
+      destruct sq.
+      + apply IHl in H. destruct H. destruct H.
+	exists (a :: x), x0. simpl. f_equal. assumption.
+      + destruct (eqb_spec a n0).
+	* subst. remember (list_eq l sq) as b.
+	  destruct b.
+	  -- injection H as H. subst.
+	     symmetry in Heqb. apply list_eq_iff in Heqb.
+	     subst. exists [], []. simpl.
+	     rewrite app_nil_r. assumption.
+	  -- apply IHl in H. destruct H. destruct H.
+	     exists (n0 :: x), x0. simpl. f_equal.
+	     assumption.
+	* apply IHl in H. do 2 destruct H.
+	  exists (a :: x), x0. simpl. f_equal. assumption.
+  Qed.
+
+  Theorem find_seq_th2
+
+
+  Compute test0 [1;2;3;7;8;10] 1 1.
+
+  Fixpoint test l n p m c :=
+    match m with
+    | 0 => Some p
+    | S m =>
+	match l with
+        | [] => None
+        | x :: t => if x =? c then test t n p m (S c)
+	    else test t n x n (S x)
+        end
+    end.
+
+  Definition test2 l n :=
+    match n, l with
+    | 0, _ => None
+    | _, [] => test l n 0 n 0
+    | S n, x :: t => test t n x n (S x)
+    end.
+
+  Theorem test2_th l n m: test2 l n = Some m ->
+    forall x, x < n -> List.In (x + m) l.
+  Proof.
+    intros. destruct l, n; simpl in *; try discriminate.
+    induction l.
+    - simpl in *. destruct n.
+      + injection H. intros. lia.
+      + discriminate.
+    - simpl in *.
+      destruct n.
+      + injection H. intros. subst. lia.
+      + destruct (eqb_spec a (S n0)).
+	* subst.
+    intros. generalize dependent l.
+    induction n; try lia. intros.
+    unfold test2 in *.
+    simpl in H. destruct l.
+    - destruct (eqb_spec n 0); try discriminate.
+      subst. injection H. intros. subst.
+      replace x with 0; try lia. simpl.
+      left. reflexivity.
+    - destruct n1.
+      +
+
+  Definition last l := test2 l (list_min gen).
+
+  Theorem t A `{numerical_semigroup A} l n :
+    generator A (fun x => List.In x gen) ->
+    list_min gen <> 0 ->
+    last l = Some n ->
+    forall a, a >= n -> A a.
+  Proof.
+    intros.
+
+End generators.
+
+Compute test2 [72;73;74] 3.
+Compute test [0;2;76;2;3;4] 3 0.
+Compute nth_sum_list2 [4;7;10] 35.
+Compute test2 (nth_sum_list2 [4;7;10] 35) 4.
+Compute nth_sum_list_limit [4;7;10] 16.
+Compute sorted_nodup (NatSort.sort (nth_sum_list [4;7;10] 21)).
+
+  Fixpoint nh_limit l n :=
+    if (length (nh n) =? l) then n
+    else 
+    match (nh n) with
+
+    let 
+    match (
+
 
 Definition nth_sum_limit l n :=
   let ln := length (olist_nth (length l - 1) n) in
