@@ -1,5 +1,7 @@
-From Coq Require Import Euclid Lia.
+From Coq Require Import Arith Euclid Lia List.
+Import Nat.
 Require Export nat.
+Require Import ensembles.
 
 
 (* submonoid of nat (with addition) *)
@@ -12,7 +14,7 @@ Theorem sub_mul_closed A `{nat_submonoid A} :
   forall n m, A m -> A (n * m).
 Proof.
   intros. induction n.
-  - rewrite mul_0_l. apply ns_zero.
+  - rewrite Nat.mul_0_l. apply ns_zero.
   - apply ns_closed; assumption.
 Qed.
 
@@ -120,4 +122,3 @@ Section numerical_semigroup.
     forall a, A a -> generates_el B a.
 
 End numerical_semigroup.
- 

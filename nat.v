@@ -1,5 +1,4 @@
-From Coq Require Export List.
-From Coq Require Import Arith Lia Permutation ZArith.
+From Coq Require Import Arith Lia List Permutation ZArith.
 Require Export ensembles.
 Export ListNotations Nat.
 
