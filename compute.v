@@ -1,6 +1,7 @@
 From Coq Require Export Permutation.
 From Coq Require Import FunctionalExtensionality Lia.
 Require Export def list.
+Import Arith_base.
  
 
 Local Notation EIn := Ensembles.In.
@@ -741,6 +742,17 @@ Section generators.
       apply LocallySorted_sort.
   Qed.
 
+  Theorem small_list_limit_sorted_lt n :
+    StronglySorted lt (small_list_limit n).
+  Proof.
+    apply LocallySorted_StronglySorted.
+    - intros x. lia.
+    - apply LocallySorted_le_NoDup_lt.
+      + apply small_list_limit_sorted.
+      + apply NoDup_filter. apply sorted_nodup_NoDup.
+	apply LocallySorted_sort.
+  Qed.
+
   Definition last_element_pos i :=
     find_seq (small_list_limit i) (list_min gen).
 
@@ -820,22 +832,21 @@ Section generators.
       apply In_nth with (d := 0) in Is.
       destruct Is as [n [Hn1 Hn2]]. subst a.
       unfold last_element in L.
-      assert (n <= last_element_pos i).
-      2:{
-	rewrite <- (firstn_skipn (S (last_element_pos i)) (small_list_limit i)).
-	unfold term in T. rewrite app_nth1.
-	- apply nth_In. unfold small_elements.
-	  rewrite firstn_length_le; lia.
-	- rewrite firstn_length_le; lia.
+      assert (n <= last_element_pos i). {
+	apply nlt_ge. intros C.
+	apply nlt_ge in L. apply L. clear L.
+	apply StronglySorted_nth; try assumption.
+	apply small_list_limit_sorted_lt.
       }
-      destruct (le_gt_cases n (last_element_pos i));
-	try assumption.
-      apply (LocallySorted_NoDup_nth_lt 0 (small_list_limit i)) in H;
-	try assumption; try lia.
-      - apply small_list_limit_sorted.
-      - apply NoDup_filter. apply sorted_nodup_NoDup.
-	apply LocallySorted_sort.
+      unfold term in T.
+      rewrite <- (firstn_skipn (S (last_element_pos i)) (small_list_limit i)).
+      rewrite app_nth1.
+      - apply nth_In. unfold small_elements.
+	rewrite firstn_length_le; lia.
+      - rewrite firstn_length_le; lia.
     Qed.
+
+(** All the elements greater than or equal to last_element are in A. *)
 
     Theorem small_elements_ge_all i : term i ->
       forall a, a >= last_element i -> A a.
@@ -847,8 +858,8 @@ Section generators.
       rewrite <- add_assoc. apply ns_closed.
       + rewrite mul_comm.
 	apply sub_mul_closed; try apply _.
-	destruct G. unfold Included in *.
-	apply H. unfold Ensembles.In, Inl.
+	destruct G as [G1 _]. unfold Included in *.
+	apply G1. simpl.
 	apply list_min_In. apply gen_neq.
       + apply (find_seq_seq 0 (small_list_limit i) (list_min gen)) in T.
 	eapply small_list_limit_In with (n := i);
@@ -858,44 +869,35 @@ Section generators.
 	rewrite <- (firstn_skipn (list_min gen)).
 	apply in_or_app. left.
 	fold (last_element_pos i) in T. rewrite T.
-	apply in_seq. split.
-	* fold (last_element i). lia.
-	* fold (last_element i).
-	  apply (mod_upper_bound (a - last_element i) (list_min gen)) in M.
-	  lia.
+	apply in_seq. fold (last_element i).
+	split; try lia.
+	apply (mod_upper_bound (a - last_element i) (list_min gen)) in M.
+	lia.
     Qed.
 
-    Theorem t i : term i ->
+(** [last_element] is [0] or its predecessor is not in [A]. *)
+
+    Theorem last_element_pred_not_in i : term i ->
       last_element i <> 0 -> ~ A (last_element i - 1).
     Proof.
       intros T N C.
       apply (small_elements_le_all i) in C;
 	try assumption; try lia.
-      assert (SS : StronglySorted le (small_list_limit i)). {
-	apply StronglySorted_filter.
-	apply LocallySorted_StronglySorted.
-	- intros x. lia.
-	- unfold small_list.
-	  apply LocallySorted_le_sorted_nodup.
-	  apply LocallySorted_sort.
-      }
+      assert (SS := small_list_limit_sorted_lt i).
       assert (last_element_pos i <> 0). {
-	intros Z. unfold last_element in *.
-	rewrite Z in *. clear Z. apply N.
+	intros D. unfold last_element in *.
+	rewrite D in *. clear D. apply N.
 	inversion SS; try reflexivity. simpl.
-	assert (In 0 (small_list_limit i)). {
+	assert (I : In 0 (small_list_limit i)). {
 	  eapply small_list_limit_all; try eassumption.
 	  - apply ns_zero.
 	  - rewrite <- H. constructor. lia.
 	}
-	apply In_nth with (d := 0) in H2.
-	destruct H2. destruct H2.
-	destruct x.
-	- rewrite <- H in H3. simpl in H3. assumption.
-	- eapply Forall_nth with (d := 0) (i := x) in H1.
-	  + rewrite <- H in *. simpl in H3.
-	    rewrite H3 in H1. lia.
-	  + rewrite <- H in H2. simpl in H2. lia.
+	apply In_nth with (d := 0) in I.
+	destruct I as [n [Ln Hn]].
+	rewrite <- H in *. destruct n; try assumption.
+	simpl in *.
+	apply Forall_nth with (d := 0) (i := n) in H1; lia.
       }
       eapply (find_seq_first 0 (small_list_limit i) _ (last_element_pos i - 1)).
       - apply T.
@@ -910,282 +912,30 @@ Section generators.
 	destruct I as [n [Hn1 Hn2]].
 	fold (last_element i).
 	replace (last_element_pos i - 1) with n; try lia.
-	unfold last_element in Hn2.
+	unfold last_element in Hn2. unfold term in T.
+	assert (Ln : n < last_element_pos i). {
+	  assert (Ln : n <= last_element_pos i). {
+	    eapply (StronglySorted_nth_c 0);
+	      try eassumption.
+	      lia.
+	  }
+	  assert (n <> last_element_pos i); try lia.
+	  intros D. subst. fold (last_element i) in *. lia.
+	}
 	assert (S n = last_element_pos i); try lia.
-	apply le_antisymm.
-	+ destruct (le_gt_cases (S n) (last_element_pos i)); try assumption.
-	  assert (L : last_element_pos i <= n); try lia.
-	  eapply StronglySorted_nth with (d := 0) in L; try eassumption.
-	  * unfold le in L. rewrite Hn2 in L.
-	    fold (last_element i) in L. lia.
-	  * intros x. lia.
-	+ destruct (le_gt_cases (last_element_pos i) (S n)); try assumption.
-	  assert (LS : LocallySorted le (small_list_limit i)). {
-	    apply StronglySorted_LocallySorted. assumption.
-	  }
-	  assert (ND : NoDup (small_list_limit i)). {
-	    apply NoDup_filter. apply sorted_nodup_NoDup.
-	    apply LocallySorted_sort.
-	  }
-	  unfold term in T.
-	  assert (n < S n); try lia.
-	  assert (H11 := H0).
-	  apply (LocallySorted_NoDup_nth_lt 0 (small_list_limit i)) in H0, H1;
-	    try assumption; lia.
+	assert (LSn : S n < length (small_list_limit i));
+	  try lia.
+	apply le_antisymm; try lia.
+	eapply (StronglySorted_nth_c 0); try eassumption.
+	unfold lt. intros D.
+	fold (last_element i) in *.
+	assert (nSn : n < S n); try lia.
+	eapply (StronglySorted_nth 0) in nSn;
+	  try eassumption.
+	lia.
     Qed.
 
-    End numerical_semigroup.
-  End generators.
-
-  Compute small_elements [4;7;10] 100.
-
-  Definition last i := let l := (nth_sum_list2 i) in
-    nth_error l (find_seq l (list_min gen)).
-
-  Theorem last_ge_all A `{numerical_semigroup A} i n :
-    generator A (fun x => In x gen) ->
-    last i = Some n -> forall a, n <= a -> A a.
-  Proof.
-    destruct (eq_dec (length gen) 0). {
-      apply length_zero_iff_nil in e. rewrite e.
-      intros. simpl in *. destruct H0.
-      unfold Included, In in *. simpl in *.
-      specialize H3 with 0.
-      assert (A 0); try apply ns_zero.
-      apply H3 in H4. inversion H4.
-      exfalso. eapply H6. 
-      -
-    }
-    assert (gen <> []). {
-      intros C.
-    }
-    unfold last in *.
-    assert (Some n <> None); try discriminate.
-    rewrite <- H1 in H3. apply nth_error_Some in H3.
-    apply find_seq_th in H3.
-    rewrite Div0.div_mod with (b := list_min gen).
-    apply ns_closed.
-    - rewrite mul_comm. apply sub_mul_closed; try apply _.
-      destruct H0. unfold Included in H0. apply H0.
-      unfold In. apply list_min_in.
-    Search div.
-    generalize (find_seq_th (nth_sum_list2 i)).
-
-  Definition is_seq l n :=
-    match n, l with
-    | 0, [] => true
-    | _, h :: t => list_eq l (seq h n)
-    | S n, [] => false
-    end.
-
-  Theorem is_seq_th l n :
-    is_seq l n = true <-> exists a, seq a n = l.
-  Proof.
-    split; intros.
-    - destruct l, n; simpl in *; try discriminate.
-      + exists 0. reflexivity.
-      + destruct (eqb_spec n0 n0); try lia.
-	apply list_eq_iff in H. exists n0.
-	f_equal. auto.
-    - destruct H.
-      destruct l, n; simpl in *; try discriminate; try reflexivity.
-      destruct (eqb_spec n0 n0); try lia.
-      apply list_eq_iff. injection H. intros. subst.
-      reflexivity.
-  Qed.
-
-  Fixpoint find_sub_aux p l s :=
-    if list_eq (firstn (length s) l) s then p else
-      match l with
-      | [] => p
-      | h :: t => find_sub_aux (S p) t s
-      end.
-
-  Theorem find_sub_aux_th p l s :
-    find_sub_aux (S p) l s = S (find_sub_aux p l s).
-  Proof.
-    generalize dependent p. induction l.
-    - simpl. destruct (list_eq (firstn (length s) []));
-	reflexivity.
-    - intros. simpl.
-      destruct (list_eq (firstn (length s) (a :: l)) s);
-	try reflexivity.
-	apply IHl.
-  Qed.
-
-  Definition find_sub := find_sub_aux 0.
-
-  Theorem find_sub_th l s : l <> [] ->
-    let p := find_sub l s in
-    p < length l <-> exists h t, l = h ++ s ++ t.
-  Proof.
-    intros N p. subst p. split; intros.
-    - clear N. induction l; simpl in *; try lia.
-      remember (list_eq (firstn (length s) l) s) as b.
-      destruct b.
-      + symmetry in Heqb. apply list_eq_iff in Heqb.
-	exists [a], (skipn (length s) l).
-	simpl. f_equal. rewrite <- Heqb at 1.
-	symmetry. apply firstn_skipn.
-      + unfold find_sub in *. simpl in *.
-	remember (list_eq (firstn (length s) (a :: l)) s) as b.
-	destruct b.
-	* symmetry in Heqb0. apply list_eq_iff in Heqb0.
-	  exists [], (skipn (length s) (a :: l)).
-	  rewrite <- Heqb0 at 1. simpl.
-	  symmetry. apply firstn_skipn.
-	* rewrite find_sub_aux_th in H.
-	  destruct IHl; try lia. destruct H0.
-	  exists (a :: x), x0. simpl. subst l. reflexivity.
-    - destruct H. destruct H. subst l. induction x.
-      + simpl. unfold find_sub.
-	remember (s ++ x0) as l. destruct l.
-	* simpl in *. contradiction N. reflexivity.
-	* simpl in *.
-	  remember (list_eq (firstn (length s) (n :: l)) s) as b.
-	  destruct b; try lia.
-	  assert (firstn (length s) (n :: l) <> s). {
-	    intros C. apply list_eq_iff in C.
-	    rewrite C in Heqb. discriminate.
-	  }
-	  contradiction H. rewrite Heql.
-	  rewrite firstn_app. rewrite sub_diag.
-	  rewrite firstn_all. rewrite firstn_O.
-	  rewrite app_nil_r. reflexivity.
-      + simpl in *. destruct s. {
-	  simpl in *. unfold find_sub. simpl. lia.
-	}
-	unfold find_sub. remember (n :: s) as s1.
-	unfold find_sub_aux.
-	remember (list_eq (firstn (length s1) (a :: x ++ s1 ++ x0)) s1) as b.
-	destruct b; try lia.
-	rewrite find_sub_aux_th.
-	apply Arith_base.lt_n_S_stt. apply IHx.
-	subst s1.
-	replace ((n :: s) ++ x0) with (n :: (s ++ x0)); try reflexivity.
-	symmetry. apply app_cons_not_nil.
-  Qed.
-
+  End numerical_semigroup.
 End generators.
 
-Compute last [4;7;10] 100.
-Compute last [72;73;74] 3.
-Compute test [0;2;76;2;3;4] 3 0.
-Compute nth_sum_list2 [4;7;10] 35.
-Compute test2 (nth_sum_list2 [4;7;10] 35) 4.
-Compute nth_sum_list_limit [4;7;10] 16.
-Compute sorted_nodup (sort (nth_sum_list [4;7;10] 21)).
-
-  Fixpoint nh_limit l n :=
-    if (length (nh n) =? l) then n
-    else 
-    match (nh n) with
-
-    let 
-    match (
-
-
-Definition nth_sum_limit l n :=
-  let ln := length (olist_nth (length l - 1) n) in
-  ln * list_min l.
-
-Theorem generates_list l a :
-  generates_el (fun x => In x l) a ->
-  exists ls, sum (fun i => nth i l 0) ls = a.
-Proof.
-  intros G. destruct G as [r x k G].
-  induction r as [ | r IH].
-  - exists []. reflexivity.
-  - rewrite seq_S. simpl. rewrite sum_app.
-    destruct IH as [h Hh]; auto.
-    assert (exists n, nth n l 0 = x r) as [n Hn]. {
-      destruct (In_nth l (x r) 0) as [n Hn]; auto.
-      exists n. apply Hn.
-    }
-    exists (h ++ repeat n (k r)). simpl. rewrite add_0_r.
-    rewrite sum_app. rewrite Hh. f_equal.
-    remember (k r) as m eqn : E. clear E.
-    induction m; simpl; auto.
-Qed.
-
-Theorem nth_sum_all A `{numerical_semigroup A} l n :
-  generator A (fun x => In x l) ->
-  forall a, A a /\ a <= nth_sum_limit l n ->
-  exists m, m <= n /\ a = nth_sum l m.
-Proof.
-  intros [_ G] a [Aa L].
-  generalize (G a Aa). clear G. intros G.
-  apply generates_list in G. destruct G as [ls Hl].
-  destruct (olist_all (length l - 1) ls) as [m Hm].
-  exists m.
-  assert (a = nth_sum l m). {
-   unfold nth_sum.
-   rewrite <- (sum_permutation _ _ _ Hm). auto.
-  }
-  split; try assumption.
-  subst a. clear A H Aa Hm H0.
-  unfold nth_sum_limit in L.
-Abort.
-
-Fixpoint first_congr l m a i n :=
-  match i with
-  | 0 => 0
-  | S i => let x := fst (nth_sum l n) in
-      if x mod m =? a mod m then x else first_congr l m a i (S n)
-  end.
-Compute first_congr [4;7;10] 4 1 100 0.
-
-Compute nth_sum [] 9.
-
-Example apery_example1 A `{numerical_semigroup A} :
-  generator A (fun x => In x [4;7;10]) ->
-  apery A 4 = (fun x => In x [0;7;10;17]).
-Proof.
-  intros I.
-  assert (n0 : 4 <> 0); try lia.
-  assert (A4 : A 4). { apply I. intuition. }
-  rewrite <- (apery_w_eq _ 4 n0); try assumption.
-  ex_ensembles x Hx.
-  - destruct Hx as [x _ y Hy]. subst.
-    destruct x as [x p].
-    assert (O : x = 0 \/ x = 1 \/ x = 2 \/ x = 3 \/ x = 4); try lia.
-    repeat destruct O as [O | O]; subst;
-      [left | do 3 right; left | left | left | left];
-      apply apery_w_spec; simpl.
-    + split; try lia. split; [apply ns_zero | reflexivity].
-    + split.
-      * split; try reflexivity.
-	destruct I as [I _].
-	replace 17 with (10 + 7); try reflexivity.
-	unfold Included, In in *.
-	apply ns_closed; apply I; simpl; intuition.
-      *
-	-- unfold In.
-Abort.
-
-  Fixpoint n_seq_aux l n x m p c :=
-    match m with
-    | 0 => p
-    | S m =>
-	match l with
-	| [] => c
-        | h :: t => if h =? x then n_seq_aux t n (S x) m p (S c) else n_seq_aux t n (S h) n c (S c)
-        end
-    end.
-
-  Definition n_seq l n :=
-    match n with
-    | 0 => length l
-    | S n => n_seq_aux l n 0 (S n) 0 0
-    end.
-
-  Theorem t l n : n_seq (skipn (n_seq l n) l) n = 0.
-  Proof.
-    induction l.
-    - destruct n; reflexivity.
-    - destruct n.
-      + simpl. rewrite length_skipn. lia.
-      + simpl. destruct (eqb_spec a 0).
-	* subst. simpl in *.
-	  rewrite skipn_cons.
-
+Compute small_elements [4;7;10] 100.

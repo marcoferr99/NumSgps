@@ -8,7 +8,7 @@ Arguments Complement {U}.
 Arguments exist {A P}.
 Arguments Finite {U}.
 Arguments Im {U V}.
-Arguments In {U}.
+Arguments In {U} /.
 Arguments Included {U}.
 Arguments Inhabited {U}.
 Arguments Inhabited_intro {U B}.
