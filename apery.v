@@ -3,21 +3,21 @@ Require Export def functions.
 
 
 Section numerical_semigroup.
-
   Context A `{numerical_semigroup A} (n : nat).
 
-  (* apery set *)
+(** Apery set definition. *)
+
   Definition apery x := A x /\ (n <= x -> ~ A (x - n)).
 
-  (* the apery set of n does not contain two different numbers that are congruent
-     modulo n *)
-  Theorem apery_congr_unique : A n ->
-    forall a b, apery a -> apery b ->
-    congr_mod n a b -> a = b.
+(** The apery set of n does not contain two different numbers that are congruent
+    modulo n. *)
+
+  Theorem apery_congr_unique a b : A n ->
+    apery a -> apery b -> congr_mod n a b -> a = b.
   Proof.
     intros An.
     assert (T : forall a b, apery a -> apery b -> a <= b -> congr_mod n a b -> a = b). {
-      intros a b Aa Ab L C.
+      clear a b. intros a b Aa Ab L C.
       destruct (le_ge_cases n b) as [Ln | Lb].
       - apply Ab in Ln.
 	apply congr_mod_divide in C. destruct C as [k Hk].
@@ -42,8 +42,11 @@ Section numerical_semigroup.
     symmetry. auto with congr_mod.
   Qed.
 
+(** [w] is the minimum element of [A] that is congruent modulo [n] to
+    [i]. *)
+
   Definition apery_min i w :=
-    min (fun x => A x /\ congr_mod n x i) w.
+    minE (fun x => A x /\ congr_mod n x i) w.
 
   Theorem apery_min_exists : n <> 0 ->
     forall i, exists w, apery_min i w.
@@ -63,7 +66,7 @@ Section numerical_semigroup.
     intros n0 i.
     destruct (apery_min_exists n0 (proj1_sig i)) as [w Hw].
     exists w. split; try assumption.
-    eauto using min_unique.
+    eauto using minE_unique.
   Qed.
 
   Definition apery_w (n0 : n <> 0) :=
@@ -157,7 +160,7 @@ Section numerical_semigroup.
 	  apply ns_closed; assumption.
 	* apply W1.
     - assert (exists k, a >= S k * n /\ ~ (apery (a - k * n)) /\ apery (a - S k * n)) as [k [K1 [K2 K3]]]. {
-	assert (exists k, min (fun k => n <= a - S k * n -> ~ A (a - S k * n - n)) k) as [k [M1 M2]]. {
+	assert (exists k, minE (fun k => n <= a - S k * n -> ~ A (a - S k * n - n)) k) as [k [M1 M2]]. {
 	    apply well_ordering_principle.
 	    apply (Inhabited_intro a). unfold In.
 	    induction n; lia.

@@ -1,6 +1,8 @@
 From Coq Require Export Ensembles Finite_sets Image.
 From Coq Require Import ClassicalChoice Powerset_Classical_facts.
 
+(** Set implicit arguments. *)
+
 Arguments Add {U}.
 Arguments Complement {U}.
 Arguments exist {A P}.
@@ -16,14 +18,20 @@ Arguments Union {U}.
 Arguments cardinal {U}.
 Arguments injective {U V}.
 
+(** * Ensembles *)
+
+(** Usual notation for union and intersection. *)
 
 Infix "∪" := Union (at level 50).
 Infix "∩" := Intersection (at level 40).
 
+(** Tactic for splitting ensembles equality into the two inclusions. *)
+
 Ltac ex_ensembles x Hx :=
   apply Extensionality_Ensembles; split; unfold Included, In; intros x Hx.
 
-(* the morgan law *)
+(** The morgan law (complement of union). *)
+
 Theorem de_morgan_cu {U} (A B : Ensemble U) :
   Complement (A ∪ B) = Complement A ∩ Complement B.
 Proof.
@@ -34,8 +42,10 @@ Proof.
     intros C. inversion C; subst; contradiction.
 Qed.
 
-Hint Resolve de_morgan_cu : sets.
 
+(** * Sigma types *)
+
+(** [proj1_sig] is injective. Requires proof irrelevance. *)
 
 Theorem proj1_sig_injective {U} (P : U -> Prop) :
   injective (@proj1_sig _ P).
@@ -44,7 +54,7 @@ Proof.
   subst. f_equal. apply proof_irrelevance.
 Qed.
 
-Theorem proj1_sig_image {U} (P : U -> Prop) :
+Theorem proj1_sig_Im {U} (P : U -> Prop) :
   Im (Full_set _) (@proj1_sig _ P) = P.
 Proof.
   ex_ensembles x Hx.
@@ -52,58 +62,59 @@ Proof.
   - apply Im_intro with (x := exist x Hx); constructor.
 Qed.
 
-Theorem injective_cardinal {U V} (A : Ensemble U) (f : U -> V) n :
+
+(** * Cardinality *)
+
+(** The image of an ensemble with cardinality [n] has cardinality [n].
+    *)
+
+Theorem injective_cardinal {U V} A (f : U -> V) n :
   injective f -> cardinal A n -> cardinal (Im A f) n.
 Proof.
   intros I C.
   destruct (cardinal_Im_intro _ _ _ f _ C) as [p Cp].
-  assert (p = n);
-    try (eapply injective_preserves_cardinal; eassumption).
-  subst. assumption.
+  replace n with p; try assumption.
+  eapply injective_preserves_cardinal; eassumption.
 Qed.
 
+(* [Full_set (sig E)] has the same cardinality as [E]. *)
 
+Inductive sig_cardinal_aux {U} (E : Ensemble U) i :
+  U -> sig E -> Prop :=
+  | sig_cardinal_aux_intro x (H : E x) :
+      sig_cardinal_aux E i x (exist x H)
+  | sig_cardinal_aux_intro_i x (H : ~ E x) :
+      sig_cardinal_aux E i x i.
 
-
-Inductive rel {U} {E : Ensemble U} (i : sig E) : U -> sig E -> Prop :=
-  | rel_intro1 x (H : E x) : rel i x (exist x H)
-  | rel_intro2 x (H : ~ E x) : rel i x i.
-
-Theorem sig_cardinal_ex {U} (E : Ensemble U) m :
-  cardinal E m -> exists n, cardinal (Full_set (sig E)) n.
+Theorem sig_cardinal {U} (E : Ensemble U) n :
+  cardinal E n -> cardinal (Full_set (sig E)) n.
 Proof.
-  destruct (classic (inhabited (sig E))) as [I | I].
-  - destruct I as [i].
-    generalize (choice (@rel U E i)). intros [f Hf].
-    + intros x. destruct (classic (E x)).
-      * exists (exist x H). apply rel_intro1.
-      * exists i. apply rel_intro2. assumption.
-    + intros C.
-      destruct (cardinal_Im_intro _ _ _ f _ C).
-      assert (Im E f = Full_set _). {
+  intros C.
+  assert (exists m, cardinal (Full_set (sig E)) m) as [m Hm]. {
+    destruct (classic (inhabited (sig E))) as [I | I].
+    - destruct I as [i].
+      generalize (choice (sig_cardinal_aux E i)).
+      intros [f Hf].
+      + intros x. destruct (classic (E x)).
+	* exists (exist x H). apply sig_cardinal_aux_intro.
+	* exists i. apply sig_cardinal_aux_intro_i.
+	  assumption.
+      + destruct (cardinal_Im_intro _ _ _ f _ C).
+	exists x.
+	replace (Full_set _) with (Im E f); try assumption.
 	ex_ensembles a Ha; try constructor.
 	destruct a as [a Ea]. exists a; try assumption.
-	specialize Hf with a. inversion Hf.
-	- subst. f_equal. apply proof_irrelevance.
-	- subst. contradiction.
-      }
-      rewrite <- H0. eauto.
-  - assert (Full_set (sig E) = Empty_set _). {
-      ex_ensembles a Ha; try constructor.
-      apply inhabits in a as In. contradiction.
-    }
-    rewrite H. exists 0. constructor.
-Qed.
-
-Theorem sig_cardinal {U} (E : Ensemble U) m :
-  cardinal E m -> cardinal (Full_set (sig E)) m.
-Proof.
-  intros Cm.
-  destruct (sig_cardinal_ex _ _ Cm) as [n Cn].
-  assert (m = n). {
-    rewrite <- (proj1_sig_image E) in Cm.
-    eapply injective_preserves_cardinal; try eassumption.
-    apply proj1_sig_injective.
+	specialize Hf with a.
+	inversion Hf; subst; try contradiction.
+	f_equal. apply proof_irrelevance.
+    - exists 0.
+      replace (Full_set _) with (Empty_set (sig E));
+	try constructor.
+      ex_ensembles x Hx; try constructor.
+      exfalso. apply I. constructor. assumption.
   }
-  subst. assumption.
+  replace -> n with m; try assumption.
+  eapply injective_preserves_cardinal; try eassumption.
+  - apply proj1_sig_injective.
+  - rewrite proj1_sig_Im. assumption.
 Qed.

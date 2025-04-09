@@ -1,7 +1,6 @@
-From Coq Require Export List.
-From Coq Require Import Arith Lia Mergesort Sorted.
-Export ListNotations.
-Import Nat.
+From Coq Require Export List Mergesort Sorted.
+From Coq Require Import Arith Lia.
+Export ListNotations Nat NatSort Relations_1.
 
 
 Theorem skipn_nth {T} (d : T) l n : n < length l ->
@@ -30,6 +29,8 @@ Proof.
 Qed.
 
 Definition Inl {T} (l : list T) x := In x l.
+
+Arguments Inl {T} l x /.
 
 Theorem Forall_repeat {T} (P : T -> Prop) x n : P x ->
   Forall P (repeat x n).
@@ -65,7 +66,7 @@ Fixpoint list_min l :=
   match l with
   | [] => 0
   | [x] => x
-  | h :: t => Nat.min h (list_min t)
+  | h :: t => min h (list_min t)
   end.
 
 Theorem list_min_In l : l <> [] ->
@@ -135,7 +136,7 @@ Proof.
 Qed.
 
 Theorem StronglySorted_LocallySorted {T} P (l : list T) :
-  StronglySorted P l ->  LocallySorted P l.
+  StronglySorted P l -> LocallySorted P l.
 Proof.
   intros.
   apply Sorted_LocallySorted_iff.
@@ -143,26 +144,26 @@ Proof.
 Qed.
 
 Theorem StronglySorted_nth {T} d P (l : list T) :
-  Relations_1.Reflexive _ P -> StronglySorted P l ->
+  StronglySorted P l ->
   forall n m, n < length l -> m < length l ->
-  n <= m -> P (nth n l d) (nth m l d).
+  n < m -> P (nth n l d) (nth m l d).
 Proof.
-  induction l; intros R SR n m Ln Lm L;
+  induction l; intros SR n m Ln Lm L;
     try (simpl in Ln; lia).
   inversion SR. subst. destruct m, n; simpl; try lia.
-  - apply R.
   - apply Forall_nth; try assumption.
     simpl in Lm. lia.
   - simpl in Ln, Lm. apply IHl; try assumption; lia.
 Qed.
 
 Theorem StronglySorted_nth_c {T} d P (l : list T) :
-  Relations_1.Reflexive _ P -> StronglySorted P l ->
+  StronglySorted P l ->
   forall n m, n < length l -> m < length l ->
-  ~ P (nth n l d) (nth m l d) -> m < n.
+  ~ P (nth n l d) (nth m l d) -> m <= n.
 Proof.
-  intros. destruct (le_gt_cases n m); try assumption.
-  exfalso. apply H3. apply StronglySorted_nth; assumption.
+  intros SR n m Ln Lm C.
+  destruct (le_gt_cases m n); try assumption.
+  exfalso. apply C. apply StronglySorted_nth; assumption.
 Qed.
 
 Theorem StronglySorted_filter {T} P f (l : list T) :
@@ -178,10 +179,10 @@ Proof.
   - inversion SS. auto.
 Qed.
 
-Theorem LocallySorted_NatSort l :
-  LocallySorted le (NatSort.sort l).
+Theorem LocallySorted_sort l :
+  LocallySorted le (sort l).
 Proof.
-  generalize (NatSort.LocallySorted_sort l). intros L.
+  generalize (LocallySorted_sort l). intros L.
   eapply LocallySorted_iff; try eassumption.
   intros. unfold is_true. fold leb.
   destruct (leb_spec x y); lia.
@@ -258,6 +259,31 @@ Proof.
     + subst. auto.
     + subst. symmetry in Heqs.
       apply sorted_nodup_head_eq in Heqs. lia.
+Qed.
+
+Theorem LocallySorted_le_NoDup_lt l :
+  LocallySorted le l -> NoDup l ->
+  LocallySorted lt l.
+Proof.
+  intros L N. induction l; try constructor.
+  destruct l; constructor.
+  - apply IHl.
+    + inversion L. assumption.
+    + inversion N. assumption.
+  - inversion L. inversion N. subst. unfold In in H6.
+    lia.
+Qed.
+
+Theorem LocallySorted_NoDup_nth_lt d l n m :
+  LocallySorted le l -> NoDup l ->
+  n < length l -> m < length l ->
+  n < m -> nth n l d < nth m l d.
+Proof.
+  intros LS N Ln Lm L.
+  eapply StronglySorted_nth; try assumption.
+  apply LocallySorted_StronglySorted.
+  - intros x. lia.
+  - apply LocallySorted_le_NoDup_lt; assumption.
 Qed.
 
 

@@ -1,7 +1,6 @@
 From Coq Require Import ClassicalUniqueChoice Description FunctionalExtensionality.
 
 Section Relation.
-
   Context {A B : Type} (R : A -> B -> Prop).
 
   Definition rel_ex_func : (forall x, exists ! y, R x y) ->
