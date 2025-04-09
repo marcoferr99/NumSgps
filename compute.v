@@ -1,6 +1,6 @@
 From Coq Require Export Permutation.
 From Coq Require Import FunctionalExtensionality Lia.
-Require Export def list.
+Require Export apery def list.
 Import Arith_base.
  
 
@@ -816,6 +816,18 @@ Section generators.
 	rewrite <- H. eapply nth_sum_in; assumption.
     Qed.
 
+    Theorem small_list_limit_small_elements i :
+      small_list_limit i = small_elements i ++ skipn (S (last_element_pos i)) (small_list_limit i).
+    Proof. symmetry. apply firstn_skipn. Qed.
+
+    Theorem small_elements_In i a :
+      In a (small_elements i) -> A a.
+    Proof.
+      intros I. apply (small_list_limit_In i).
+      rewrite small_list_limit_small_elements.
+      apply in_or_app. left. assumption.
+    Qed.
+
 (** [small_elements] contains all the elements of [A] that are less then or
     equal to [last_element]. *)
 
@@ -935,7 +947,155 @@ Section generators.
 	lia.
     Qed.
 
+    Theorem i_not_zero i : term i -> i <> 0.
+    Proof.
+      unfold term. intros T C. subst.
+      simpl in T. lia.
+    Qed.
+
+    Theorem nth_limit_not_zero i : term i ->
+      nth_limit i <> 0.
+    Proof.
+      unfold nth_limit. intros T C.
+      apply eq_mul_0_r in C; try contradiction.
+      destruct i.
+      - apply i_not_zero in T. contradiction.
+      - intros D. apply length_zero_iff_nil in D.
+	simpl in D. eapply next_not_nil. eassumption.
+    Qed.
+
+    Theorem small_list_limit_not_nil i : term i ->
+      small_list_limit i <> [].
+    Proof.
+      intros T C.
+      generalize (small_list_all i 0). intros I.
+      unfold small_list_limit in *.
+      assert (N : In 0 []); try inversion N.
+      rewrite <- C. apply filter_In.
+      apply nth_limit_not_zero in T. split.
+      - apply I; try apply ns_zero. lia.
+      - destruct (ltb_spec 0 (nth_limit i));
+	  try reflexivity.
+	lia.
+    Qed.
+
   End numerical_semigroup.
 End generators.
 
 Compute small_elements [4;7;10] 100.
+
+Definition mod_ge n a x :=
+  let r := x - x mod n + a mod n in
+  if x <=? r then r else r + n.
+
+Theorem mod_ge_mod n a x : (mod_ge n a x) mod n = a mod n.
+Proof.
+  unfold mod_ge.
+  assert ((x - x mod n) mod n = 0). {
+    generalize (Div0.div_mod x n). intros D.
+    replace (x - x mod n) with (n * (x / n)); try lia.
+    rewrite mul_comm. apply Div0.mod_mul.
+  }
+  destruct (leb_spec x (x - x mod n + a mod n)).
+  - rewrite <- Div0.add_mod_idemp_l. rewrite H.
+    simpl. apply Div0.mod_mod.
+  - rewrite <- add_assoc. rewrite <- Div0.add_mod_idemp_l.
+    rewrite H. simpl.
+    rewrite <- (Div0.add_mod_idemp_r _ n).
+    rewrite Div0.mod_same. rewrite add_0_r.
+    apply Div0.mod_mod.
+Qed.
+
+Theorem mod_ge_ge n a x : n <> 0 -> x <= mod_ge n a x.
+Proof.
+  intros n0. unfold mod_ge.
+  destruct (leb_spec x (x - x mod n + a mod n)); try lia.
+  apply (mod_upper_bound a) in n0 as U.
+  apply (mod_upper_bound x) in n0. lia.
+Qed.
+
+Theorem mod_ge_lt n a x : n <> 0 -> mod_ge n a x < x + n.
+Proof.
+  intros n0. unfold mod_ge.
+  destruct (leb_spec x (x - x mod n + a mod n)); try lia.
+  apply (mod_upper_bound a) in n0 as U.
+  apply (mod_upper_bound x) in n0. lia.
+Qed.
+
+
+Fixpoint find_congr n a l := let an := a mod n in
+  match l with
+  | [] => 0
+  | [e] => mod_ge n a e
+  | h :: t => if h mod n =? an then h else find_congr n a t
+  end.
+
+Theorem find_congr_rewrite n a x y t :
+  find_congr n a (x :: y :: t) =
+  if x mod n =? a mod n then x else find_congr n a (y :: t).
+Proof. reflexivity. Qed.
+
+Theorem find_congr_th n a l : n <> 0 -> l <> [] ->
+  In (find_congr n a l) l \/
+  find_congr n a l > nth (length l - 1) l 0.
+Proof.
+  intros n0 ln. induction l as [ | h t IH]; try contradiction.
+  destruct t as [ | k t].
+  - simpl in *.
+    destruct (eq_dec h (mod_ge n a h)); [intuition | ].
+    right. apply (mod_ge_ge _ a h) in n0. lia.
+  - rewrite find_congr_rewrite.
+    destruct (eqb_spec (h mod n) (a mod n)).
+    + simpl. intuition.
+    + remember (find_congr n a (k :: t)) as l.
+      destruct IH; try discriminate.
+      * left. simpl in *. intuition.
+      * right. simpl in *.
+	rewrite sub_0_r in H. assumption.
+Qed.
+
+
+Compute small_elements [4;7;10] 100.
+Compute find_congr 4 3 (small_elements [4;7;10] 100).
+
+Theorem find_congr_apery_w A `{numerical_semigroup A}
+  gen i n (n0 : n <> 0) :
+  generator A (Inl gen) ->
+  term gen i -> list_min gen <> 0 ->
+  forall x, find_congr n (proj1_sig x) (small_elements gen i) = apery_w A n n0 x.
+Proof.
+  intros G T M0 x.
+  destruct (apery_w_spec A n n0) as [_ P].
+  apply P. clear P.
+  assert (SN : small_elements gen i <> []). {
+    unfold small_elements. intros C.
+    remember (small_list_limit gen i) as sl.
+    destruct sl.
+    - eapply small_list_limit_not_nil; try eassumption.
+      auto.
+    - simpl in C. discriminate.
+  }
+  destruct x as [x px]. simpl. split.
+  - split.
+    + destruct (find_congr_th n x (small_elements gen i));
+	try assumption.
+      * eapply small_elements_In; eassumption.
+      * eapply small_elements_ge_all; try eassumption.
+	replace (length (small_elements gen i) - 1) with
+	  (last_element_pos gen i) in H0.
+	-- unfold small_elements in H0 at 2.
+	   rewrite nth_firstn in H0.
+	   destruct (ltb_spec (last_element_pos gen i) (S (last_element_pos gen i))); try lia.
+	   fold (last_element gen i) in H0. lia.
+	-- unfold small_elements.
+	   rewrite firstn_length_le; try lia.
+	   unfold term in T. lia.
+    + remember (small_elements gen i) as l eqn : E.
+      clear E. induction l; try contradiction.
+      destruct l.
+      * simpl. apply mod_ge_mod.
+      * rewrite find_congr_rewrite.
+	destruct (eqb_spec (a mod n) (x mod n));
+	  try assumption.
+	apply IHl. discriminate.
+  - intros m [Am Cm].
