@@ -3,6 +3,13 @@ From Coq Require Import Arith Lia.
 Export ListNotations Nat NatSort Relations_1.
 
 
+(*************************)
+(** * Generic list facts *)
+(*************************)
+
+Definition Inl {T} (l : list T) x := In x l.
+Arguments Inl {T} l x /.
+
 Theorem skipn_nth {T} (d : T) l n : n < length l ->
   skipn n l = nth n l d :: skipn (S n) l.
 Proof.
@@ -28,71 +35,14 @@ Proof.
   - repeat f_equal. lia.
 Qed.
 
-Definition Inl {T} (l : list T) x := In x l.
-
-Arguments Inl {T} l x /.
-
 Theorem Forall_repeat {T} (P : T -> Prop) x n : P x ->
   Forall P (repeat x n).
 Proof. intros. induction n; constructor; assumption. Qed.
 
-Fixpoint nth_inv d l x :=
-  match l with
-  | [] => d
-  | h :: t => if h =? x then 0 else S (nth_inv d t x)
-  end.
 
-Theorem nth_inv_lt d l x : In x l ->
-  nth_inv d l x < length l.
-Proof.
-  induction l; try contradiction.
-  simpl. intros I. destruct (eqb_spec a x); try lia.
-  apply Arith_base.lt_n_S_stt. intuition.
-Qed.
-
-Theorem nth_nth_inv d e l x : In x l ->
-  nth (nth_inv d l x) l e = x.
-Proof.
-  induction l; try contradiction.
-  intros I. simpl.
-  destruct (eqb_spec a x); try assumption.
-  simpl in I. intuition.
-Qed.
-
-
-(** * List minimum *)
-
-Fixpoint list_min l :=
-  match l with
-  | [] => 0
-  | [x] => x
-  | h :: t => min h (list_min t)
-  end.
-
-Theorem list_min_In l : l <> [] ->
-  In (list_min l) l.
-Proof.
-  intros. induction l; try contradiction.
-  simpl in *. destruct l; [intuition | ].
-  destruct (le_ge_cases a (list_min (n :: l))).
-  - rewrite min_l; try assumption. intuition.
-  - rewrite min_r; try assumption.
-    right. apply IHl. discriminate.
-Qed.
-
-Theorem list_min_le l x : In x l ->
-  list_min l <= x.
-Proof.
-  intros. induction l; simpl; try lia.
-  destruct l.
-  - simpl in *. intuition lia.
-  - inversion H.
-    + rewrite le_min_l. lia.
-    + rewrite le_min_r. auto.
-Qed.
-
-
+(**************)
 (** * Sorting *)
+(**************)
 
 Theorem LocallySorted_middle {T} P (l : list T) a h :
   LocallySorted P (l ++ [a]) -> LocallySorted P (a :: h) ->
@@ -127,8 +77,7 @@ Proof.
 Qed.
 
 Theorem LocallySorted_StronglySorted {T} P (l : list T) :
-  Relations_1.Transitive P -> LocallySorted P l ->
-  StronglySorted P l.
+  Transitive P -> LocallySorted P l -> StronglySorted P l.
 Proof.
   intros.
   apply Sorted_StronglySorted; try assumption.
@@ -179,6 +128,78 @@ Proof.
   - inversion SS. auto.
 Qed.
 
+
+(*******************************)
+(** * Lists of natural numbers *)
+(*******************************)
+
+
+(**********************************)
+(** ** Inverse function for [nth] *)
+(**********************************)
+
+Fixpoint nth_inv d l x :=
+  match l with
+  | [] => d
+  | h :: t => if h =? x then 0 else S (nth_inv d t x)
+  end.
+
+Theorem nth_inv_lt d l x : In x l ->
+  nth_inv d l x < length l.
+Proof.
+  induction l; try contradiction.
+  simpl. intros I. destruct (eqb_spec a x); try lia.
+  apply Arith_base.lt_n_S_stt. intuition.
+Qed.
+
+Theorem nth_nth_inv d e l x : In x l ->
+  nth (nth_inv d l x) l e = x.
+Proof.
+  induction l; try contradiction.
+  intros I. simpl.
+  destruct (eqb_spec a x); try assumption.
+  simpl in I. intuition.
+Qed.
+
+
+(********************)
+(** ** List minimum *)
+(********************)
+
+Fixpoint list_min l :=
+  match l with
+  | [] => 0
+  | [x] => x
+  | h :: t => min h (list_min t)
+  end.
+
+Theorem list_min_In l : l <> [] ->
+  In (list_min l) l.
+Proof.
+  intros. induction l; try contradiction.
+  simpl in *. destruct l; [intuition | ].
+  destruct (le_ge_cases a (list_min (n :: l))).
+  - rewrite min_l; try assumption. intuition.
+  - rewrite min_r; try assumption.
+    right. apply IHl. discriminate.
+Qed.
+
+Theorem list_min_le l x : In x l ->
+  list_min l <= x.
+Proof.
+  intros. induction l; simpl; try lia.
+  destruct l.
+  - simpl in *. intuition lia.
+  - inversion H.
+    + rewrite le_min_l. lia.
+    + rewrite le_min_r. auto.
+Qed.
+
+
+(***************)
+(** ** Sorting *)
+(***************)
+
 Theorem LocallySorted_sort l :
   LocallySorted le (sort l).
 Proof.
@@ -187,6 +208,36 @@ Proof.
   intros. unfold is_true. fold leb.
   destruct (leb_spec x y); lia.
 Qed.
+
+Theorem LocallySorted_le_NoDup_lt l :
+  LocallySorted le l -> NoDup l ->
+  LocallySorted lt l.
+Proof.
+  intros L N. induction l; try constructor.
+  destruct l; constructor.
+  - apply IHl.
+    + inversion L. assumption.
+    + inversion N. assumption.
+  - inversion L. inversion N. subst. unfold In in H6.
+    lia.
+Qed.
+
+Theorem LocallySorted_NoDup_nth_lt d l n m :
+  LocallySorted le l -> NoDup l ->
+  n < length l -> m < length l ->
+  n < m -> nth n l d < nth m l d.
+Proof.
+  intros LS N Ln Lm L.
+  eapply StronglySorted_nth; try assumption.
+  apply LocallySorted_StronglySorted.
+  - intros x. lia.
+  - apply LocallySorted_le_NoDup_lt; assumption.
+Qed.
+
+
+(***************************)
+(** ** Removing duplicates *)
+(***************************)
 
 Fixpoint sorted_nodup l :=
   match l with
@@ -261,33 +312,10 @@ Proof.
       apply sorted_nodup_head_eq in Heqs. lia.
 Qed.
 
-Theorem LocallySorted_le_NoDup_lt l :
-  LocallySorted le l -> NoDup l ->
-  LocallySorted lt l.
-Proof.
-  intros L N. induction l; try constructor.
-  destruct l; constructor.
-  - apply IHl.
-    + inversion L. assumption.
-    + inversion N. assumption.
-  - inversion L. inversion N. subst. unfold In in H6.
-    lia.
-Qed.
 
-Theorem LocallySorted_NoDup_nth_lt d l n m :
-  LocallySorted le l -> NoDup l ->
-  n < length l -> m < length l ->
-  n < m -> nth n l d < nth m l d.
-Proof.
-  intros LS N Ln Lm L.
-  eapply StronglySorted_nth; try assumption.
-  apply LocallySorted_StronglySorted.
-  - intros x. lia.
-  - apply LocallySorted_le_NoDup_lt; assumption.
-Qed.
-
-
-(** * Find sequence *)
+(*********************)
+(** ** List equality *)
+(*********************)
 
 Fixpoint list_eq l m :=
   match l, m with
@@ -313,6 +341,11 @@ Proof.
       injection C. auto.
     + intros C. injection C as N. contradiction.
 Qed.
+
+
+(***********************)
+(** ** Find a sequence *)
+(***********************)
 
 Fixpoint find_seq_aux p l n :=
   match l with

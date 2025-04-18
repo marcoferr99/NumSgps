@@ -1,8 +1,10 @@
 From Coq Require Import Arith Euclid Lia.
-Require Export ensembles nat.
+Require Export nat.
 
 
-(** Submonoid of [nat] (with addition). *)
+(*************************************)
+(** * Numerical semigroup definition *)
+(*************************************)
 
 Class nat_submonoid (A : nat -> Prop) : Prop := {
   ns_zero : A 0;
@@ -14,90 +16,15 @@ Theorem sub_mul_closed A `{nat_submonoid A} :
 Proof.
   intros. induction n.
   - rewrite mul_0_l. apply ns_zero.
-  - apply ns_closed; assumption.
+  - now apply ns_closed.
 Qed.
-
-(** Numerical semigroup definition. *)
 
 Class numerical_semigroup (A : nat -> Prop) : Prop := {
   ns_submonoid :: nat_submonoid A;
   ns_cofinite : Finite (Complement A)
 }.
 
-(** Equivalent condition for a numerical semigroup. *)
-
-Theorem numerical_semigroup_equiv A `{nat_submonoid A} :
-  numerical_semigroup A <->
-  exists x y, A x /\ A y /\ x - y = 1.
-Proof.
-  split; intros I.
-  - assert (exists a, A a /\ A (S a)) as [a [Aa As]]. {
-      destruct (cofinite_definitive A) as [m Hm];
-	try apply I.
-      exists m. split; apply Hm; lia.
-    }
-    exists (S a), a. repeat (split; try assumption).
-    lia.
-  - assert (exists a, A a /\ A (a + 1)) as [a [Aa Ha]]. {
-      destruct I as [x [y [Ax [Ay Hxy]]]].
-      exists y. split; try assumption.
-      replace (y + 1) with x; try assumption. lia.
-    }
-    assert (Hn : forall n, n >= (a - 1) * (a + 1) -> A n). {
-      intros n Hn. destruct a.
-      - replace n with (n * 1); try lia.
-	apply sub_mul_closed; assumption.
-      - assert (diveucl n (S a)) as [q r g e].
-	  { apply eucl_dev. lia. }
-	assert (N : n = (q - r) * (S a) + r * ((S a) + 1)). {
-	  assert (q >= r). {
-	    apply le_trans with a; try lia.
-	    assert (a * (S a) <= q * (S a)); try lia.
-	    rewrite mul_le_mono_pos_r; [eassumption | lia].
-	  }
-	  rewrite mul_sub_distr_r, mul_add_distr_l.
-	  rewrite add_assoc, sub_add; try lia.
-	  apply mul_le_mono_r. assumption.
-	}
-	rewrite N.
-	apply ns_closed; apply sub_mul_closed; assumption.
-    }
-    set (m := (a - 1) * (a + 1)).
-    assert (In : Included (Complement A) (fun x => x < m)). {
-      unfold Included, In, Complement. intros.
-      destruct (le_gt_cases m x); try assumption.
-      exfalso. auto with sets.
-    }
-    constructor; try assumption.
-    eapply Finite_downward_closed; try eassumption.
-    clear In. induction m.
-    + replace (fun x => x < 0) with (Empty_set nat);
-	try constructor.
-	ex_ensembles x Hx; [contradiction | lia].
-    + replace (fun x => x < S m) with (Add (fun x => x < m) m).
-      * constructor; try assumption. unfold In. lia.
-      * ex_ensembles x Hx.
-	-- destruct Hx as [x Hx | x Hx].
-	   ++ unfold In in *. lia.
-	   ++ inversion Hx. lia.
-	-- destruct (eq_dec x m).
-	   ++ subst. apply Union_intror. constructor.
-	   ++ constructor. unfold In. lia.
-Qed.
-
-(** The set of even natural numbers is not a numerical semigroup. *)
-
-Example even_not_numerical_semigroup :
-  ~ numerical_semigroup (fun x => exists y, x = 2 * y).
-Proof.
-  intros C.
-  destruct (numerical_semigroup_equiv (fun x => exists y, x = 2 * y)) as [H _].
-  destruct H as [x [y [[a Ha] [[b H2] H3]]]];
-    try assumption.
-  subst. lia.
-Qed.
-
-(** Some definitions. *)
+(** Some definitions over numerical semigroups *)
 
 Section numerical_semigroup.
   Context A `{numerical_semigroup A}.
@@ -111,26 +38,86 @@ Section numerical_semigroup.
 End numerical_semigroup.
 
 
-(** * Generators *)
+(** Equivalent condition for a numerical semigroup *)
 
-(** Generating an element from an ensemble [B]. *)
-
-Inductive generates_el (B : nat -> Prop) : nat -> Prop :=
-  generates_el_intro r x l :
-    (forall i, i < r -> B (x i)) ->
-    generates_el B (sum (fun i => l i * x i) (seq 0 r)).
-
-Arguments generates_el_intro {B}.
-
-Theorem generates_el_eq {B a} r x l :
-  (forall i, i < r -> B (x i)) ->
-  a = sum (fun i => l i * x i) (seq 0 r) ->
-  generates_el B a.
+Theorem numerical_semigroup_equiv A :
+  numerical_semigroup A <-> nat_submonoid A /\
+  exists x, A x /\ A (S x).
 Proof.
-  intros H1 H2. rewrite H2. constructor. assumption.
+  split.
+  - intros I. split; try apply I.
+    destruct (cofinite_definitive A) as [m Hm];
+      try apply I.
+    exists m. split; apply Hm; auto.
+  - intros [NS I].
+    constructor; try assumption.
+    destruct I as [a [Aa Ha]].
+    apply definitive_cofinite. exists ((a - 1) * (a + 1)).
+    intros n Hn. destruct a.
+    + replace n with (n * 1); try lia.
+      now apply sub_mul_closed.
+    + assert (diveucl n (S a)) as [q r g e].
+	{ apply eucl_dev. trivial with arith. }
+      assert (N : n = (q - r) * S a + r * (S (S a))). {
+	assert (q >= r). {
+	  apply le_trans with a; try lia.
+	  assert (a * S a <= q * S a); try lia.
+	  rewrite mul_le_mono_pos_r; [eassumption | lia].
+	}
+	replace (S (S a)) with (S a + 1); try lia.
+	rewrite mul_sub_distr_r, mul_add_distr_l.
+	rewrite add_assoc, sub_add; try lia.
+	now apply mul_le_mono_r.
+      }
+      rewrite N.
+      apply ns_closed; now apply sub_mul_closed.
 Qed.
 
-(** Generator of a numerical semigroup. *)
+(** The set of even natural numbers is not a numerical semigroup *)
+
+Example even_not_numerical_semigroup :
+  let E x := exists y, x = 2 * y in
+  ~ numerical_semigroup E.
+Proof.
+  intros E C.
+  destruct (numerical_semigroup_equiv E) as [NE _].
+  destruct NE as (_ & x & [a ->] & [b H]); try assumption.
+  lia.
+Qed.
+
+
+(*****************)
+(** * Generators *)
+(*****************)
+
+(** Generating an element from an ensemble [B] *)
+
+Inductive generates (B : nat -> Prop) : nat -> Prop :=
+  generates_intro r x l
+    (IB : (forall i, i < r -> B (x i))) :
+    generates B (sum (fun i => l i * x i) (seq 0 r)).
+
+Arguments generates_intro {B}.
+
+Theorem generates_eq B a r x l :
+  (forall i, i < r -> B (x i)) ->
+  a = sum (fun i => l i * x i) (seq 0 r) ->
+  generates B a.
+Proof. intros H ->. easy. Qed.
+
+Theorem generates_in A `{numerical_semigroup A} B a :
+  Included B A -> generates B a -> A a.
+Proof.
+  intros I G. inversion G. subst.
+  clear G. induction r; [apply H|].
+  rewrite seq_S. rewrite sum_app. apply ns_closed.
+  - apply IHr. intros. apply IB. lia.
+  - simpl. rewrite add_0_r.
+    apply sub_mul_closed; [apply H|].
+    apply I. apply IB. lia.
+Qed.
+
+(** Generator of a numerical semigroup *)
 
 Definition generator A `{numerical_semigroup A} B :=
-  Included B A /\ forall a, A a -> generates_el B a.
+  Included B A /\ forall a, A a -> generates B a.

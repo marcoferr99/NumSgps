@@ -1,7 +1,8 @@
 From Coq Require Export Ensembles Finite_sets Image.
 From Coq Require Import ClassicalChoice Powerset_Classical_facts.
 
-(** Set implicit arguments. *)
+
+(** Set implicit arguments *)
 
 Arguments Add {U}.
 Arguments Complement {U}.
@@ -18,32 +19,35 @@ Arguments Union {U}.
 Arguments cardinal {U}.
 Arguments injective {U V}.
 
-(** * Ensembles *)
 
-(** Usual notation for union and intersection. *)
+Notation EIn := In.
 
+(** Usual notation for union and intersection *)
 Infix "∪" := Union (at level 50).
 Infix "∩" := Intersection (at level 40).
 
-(** Tactic for splitting ensembles equality into the two inclusions. *)
+
+(** Tactic for splitting ensembles equality into the two inclusions *)
 
 Ltac ex_ensembles x Hx :=
-  apply Extensionality_Ensembles; split; unfold Included, In; intros x Hx.
+  apply Extensionality_Ensembles;
+    split; unfold Included, In; intros x Hx.
 
-(** The morgan law (complement of union). *)
+(** De Morgan law (complement of union) *)
 
 Theorem de_morgan_cu {U} (A B : Ensemble U) :
   Complement (A ∪ B) = Complement A ∩ Complement B.
 Proof.
   ex_ensembles x Hx; unfold Complement in *.
-  - constructor; unfold In; intros C; apply Hx;
-      auto with sets.
-  - inversion Hx. subst. unfold In in *.
+  - constructor; auto with sets.
+  - inversion Hx. subst. simpl in *.
     intros C. inversion C; subst; contradiction.
 Qed.
 
 
+(******************)
 (** * Sigma types *)
+(******************)
 
 (** [proj1_sig] is injective. Requires proof irrelevance. *)
 
@@ -63,10 +67,11 @@ Proof.
 Qed.
 
 
+(******************)
 (** * Cardinality *)
+(******************)
 
-(** The image of an ensemble with cardinality [n] has cardinality [n].
-    *)
+(** The image of an ensemble with cardinality [n] has cardinality [n] *)
 
 Theorem injective_cardinal {U V} A (f : U -> V) n :
   injective f -> cardinal A n -> cardinal (Im A f) n.
@@ -77,7 +82,7 @@ Proof.
   eapply injective_preserves_cardinal; eassumption.
 Qed.
 
-(* [Full_set (sig E)] has the same cardinality as [E]. *)
+(* [Full_set (sig E)] has the same cardinality as [E] *)
 
 Inductive sig_cardinal_aux {U} (E : Ensemble U) i :
   U -> sig E -> Prop :=

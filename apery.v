@@ -2,48 +2,43 @@ From Coq Require Import Lia.
 Require Export def functions.
 
 
-Section numerical_semigroup.
+Section apery.
   Context A `{numerical_semigroup A} (n : nat).
 
-(** Apery set definition. *)
+  (** Apery set definition *)
 
   Definition apery x := A x /\ (n <= x -> ~ A (x - n)).
 
-(** The apery set of n does not contain two different numbers that are congruent
-    modulo n. *)
+  (** The apery set of [n] does not contain two
+      different numbers that are congruent modulo [n] *)
 
   Theorem apery_congr_unique a b : A n ->
     apery a -> apery b -> congr_mod n a b -> a = b.
   Proof.
     intros An.
-    assert (T : forall a b, apery a -> apery b -> a <= b -> congr_mod n a b -> a = b). {
+    assert (T :
+      forall a b, apery a -> apery b -> a <= b ->
+      congr_mod n a b -> a = b
+    ). {
       clear a b. intros a b Aa Ab L C.
-      destruct (le_ge_cases n b) as [Ln | Lb].
+      destruct (le_gt_cases n b) as [Ln | Lb].
       - apply Ab in Ln.
 	apply congr_mod_divide in C. destruct C as [k Hk].
 	destruct k; try lia.
 	exfalso. apply Ln.
 	replace (b - n) with (k * n + a); try lia.
 	apply ns_closed; try apply Aa.
-	+ clear Hk Ln.
-	  induction k; apply H; try assumption.
+	clear Hk Ln. induction k; now apply H.
       - destruct (le_gt_cases n a); try lia.
         unfold congr_mod in C.
-	rewrite mod_small in C; try assumption.
-	rewrite mod_small in C; try assumption.
-	unfold apery in Ab.
-	destruct (le_gt_cases n b); try assumption.
-	assert (b = n); try lia. subst.
-	destruct Ab.
-	exfalso. apply H3; try assumption.
-	rewrite sub_diag. apply ns_zero.
+	do 2 rewrite mod_small in C; assumption.
     }
     intros. destruct (le_ge_cases a b); try auto.
     symmetry. auto with congr_mod.
   Qed.
 
-(** [w] is the minimum element of [A] that is congruent modulo [n] to
-    [i]. *)
+  (** [w] is the minimum element of [A] that
+      is congruent to [i] modulo [n] *)
 
   Definition apery_min i w :=
     minE (fun x => A x /\ congr_mod n x i) w.
@@ -58,6 +53,11 @@ Section numerical_semigroup.
     + apply Hm. destruct n; lia.
     + unfold congr_mod. apply Div0.mod_add.
   Qed.
+
+
+  (*************************)
+  (** * [apery_w] function *)
+  (*************************)
 
   Theorem apery_w_is_func : n <> 0 ->
     forall i : {x | x < n},
@@ -87,14 +87,14 @@ Section numerical_semigroup.
     unfold congr_mod in *. rewrite I in Hx.
     rewrite Hx in Hy. clear Hx I n0 Hw.
     destruct x, y. simpl in *.
-    rewrite mod_small, mod_small in Hy; assumption.
+    now do 2 rewrite mod_small in Hy.
   Qed.
 
   Theorem apery_w_congr (n0 : n <> 0) :
     forall x, congr_mod n (apery_w n0 x) (proj1_sig x).
   Proof. apply apery_w_spec. Qed.
 
-  (* apery_alt has a representative for every modulo class *)
+  (** [apery_alt] has a representative for every modulo class *)
   Theorem apery_w_all_classes (n0 : n <> 0) :
     forall x, exists i, congr_mod n x (apery_w n0 i).
   Proof.
@@ -104,7 +104,7 @@ Section numerical_semigroup.
     symmetry. apply Div0.mod_mod.
   Qed.
 
-  (* apery and apery_alt are the same set *)
+  (** [apery] and [apery_alt] are the same set *)
   Theorem apery_w_eq (n0 : n <> 0) : A n ->
     Im (Full_set _) (apery_w n0) = apery.
   Proof.
@@ -138,11 +138,11 @@ Section numerical_semigroup.
     rewrite <- (apery_w_eq n0); try assumption.
     apply injective_cardinal.
     - apply apery_w_injective.
-    - apply sig_cardinal. apply cardinal_lt_n.
+    - apply sig_cardinal. apply cardinal_gt_n.
   Qed.
 
-  (* every element of A can be written as k * n + w, where w is an element
-     of apery *)
+  (** Every element of [A] can be written as [k * n + w],
+      where [w] is an element of [apery] *)
   Theorem apery_generates : A n -> n <> 0 ->
     forall a, A a ->
     exists ! k w, apery w /\ a = k * n + w.
@@ -155,12 +155,17 @@ Section numerical_semigroup.
 	destruct x; try reflexivity.
 	exfalso. apply Ap; try lia.
 	replace (a - n) with (x * n + w); try lia.
-	apply ns_closed.
-	* clear W1 W2 W3. induction x; try apply ns_zero.
-	  apply ns_closed; assumption.
-	* apply W1.
-    - assert (exists k, a >= S k * n /\ ~ (apery (a - k * n)) /\ apery (a - S k * n)) as [k [K1 [K2 K3]]]. {
-	assert (exists k, minE (fun k => n <= a - S k * n -> ~ A (a - S k * n - n)) k) as [k [M1 M2]]. {
+	apply ns_closed; [|apply W1].
+	clear W1 W2 W3. induction x; [apply ns_zero|].
+	now apply ns_closed.
+    - assert (
+	exists k, a >= S k * n /\
+	~ (apery (a - k * n)) /\ apery (a - S k * n)
+      ) as [k [K1 [K2 K3]]]. {
+	assert (
+	  exists k, minE (fun k => n <= a - S k * n ->
+	    ~ A (a - S k * n - n)) k
+	) as [k [M1 M2]]. {
 	    apply well_ordering_principle.
 	    apply (Inhabited_intro a). unfold In.
 	    induction n; lia.
@@ -183,7 +188,7 @@ Section numerical_semigroup.
 	    replace (a - S k * n - n) with (a - S (S k) * n); [assumption | lia].
 	}
 	split; try assumption.
-	unfold apery. split; [ | intuition].
+	unfold apery. split; [|intuition].
 	intros [C1 C2].
 	apply C2; try lia.
 	replace (a - k * n - n) with (a - S k * n);
@@ -216,7 +221,7 @@ Section numerical_semigroup.
     - intros a Aa.
       generalize (apery_generates An n0 a Aa).
       intros [k [[w [[Aw E] _]] _]].
-      apply (generates_el_eq
+      apply (generates_eq _ _
 	2
 	(fun y => match y with
 			 | 0 => n
@@ -233,7 +238,7 @@ Section numerical_semigroup.
       + simpl. lia.
   Qed.
 
-End numerical_semigroup.
+End apery.
 
 
 Theorem finite_gen A `{numerical_semigroup A} : exists B, Finite B /\ generator A B.
