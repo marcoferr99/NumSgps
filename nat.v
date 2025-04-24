@@ -1,7 +1,7 @@
 From Coq Require Export List Permutation.
-From Coq Require Import Arith Lia ZArith.
-Require Export ensembles.
+From stdpp Require Export sets.
 Export ListNotations Nat.
+From Coq Require Import Arith Lia ZArith.
 
 
 (*************************)
@@ -38,117 +38,49 @@ Create HintDb congr_mod.
 Hint Resolve congr_mod_symm : congr_mod.
 
 
-(****************)
-(** * Ensembles *)
-(****************)
+(***********)
+(** * Sets *)
+(***********)
 
-(** A cofinite [nat] ensemble contains all numbers
-    greater than some fixed number *)
-
-Theorem cofinite_definitive A : Finite (Complement A) ->
-  exists m, forall n, n >= m -> A n.
+Theorem finite_definitive {C} `{SemiSet nat C} (A : C) :
+  set_finite A <-> exists m, forall n, m <= n -> ~ n ∈ A.
 Proof.
-  intros F. remember (Complement A) as C eqn : EC.
-  generalize dependent A.
-  induction F.
-  - intros. exists 0. intros n _.
-    rewrite <- (Complement_Complement _ A).
-    now rewrite <- EC.
-  - intros B EC.
-    assert (EA : A = Complement (Add B x)). {
-      clear IHF.
-      unfold Add. rewrite de_morgan_cu. rewrite <- EC.
-      ex_ensembles a Ha.
-      - constructor; try (constructor; assumption).
-	unfold Complement, In. intros C. inversion C.
-	subst. contradiction.
-      - unfold Complement, In in *.
-	inversion Ha as [y Aa]. subst.
-	inversion Aa as [|y Sx]; subst; try assumption.
-	inversion Sx. subst. unfold In in *. contradiction.
-    }
-    destruct (IHF _ EA) as [m Hm].
-    exists (x + m + 1). intros n Hn.
-    assert (L : n >= m); try lia. apply Hm in L.
-    inversion L as [|y Sx]; try assumption.
-    destruct Sx. lia.
+  split.
+  - intros [l Hl].
+    destruct l as [ | h t].
+    + exists 0. intros n Hn N. apply Hl in N. inversion N.
+    + remember (h :: t) as l.
+      exists (S (list_max l)).
+      intros n Hn N.
+      apply list_max_lt in Hn; [|subst; discriminate].
+      apply Hl in N. rewrite elem_of_list_In in N.
+      apply In_nth with (d := 0) in N as [x [Lx Hx]].
+      eapply Forall_nth with (d := 0) in Hn;
+	[|eassumption].
+      lia.
+  - intros [m Hm].
+    exists (seq 0 m). intros n Hn.
+    destruct (le_gt_cases m n).
+    + exfalso. eapply Hm; eassumption.
+    + rewrite elem_of_list_In. apply in_seq. lia.
 Qed.
 
-Theorem definitive_cofinite A :
-  (exists m, forall n, n >= m -> A n) ->
-  Finite (Complement A).
-Proof.
-  intros [m Hm].
-  assert (In : Included (Complement A) (gt m)). {
-    unfold Included, Complement. simpl. intros x Hx.
-    destruct (le_gt_cases m x); try assumption.
-    exfalso. auto.
-  }
-  eapply Finite_downward_closed; try eassumption.
-  clear In Hm. induction m.
-  - replace (gt 0) with (Empty_set nat); try constructor.
-    now ex_ensembles x Hx.
-  - replace (gt (S m)) with (Add (gt m) m).
-    + constructor; try assumption. simpl. lia.
-    + ex_ensembles x Hx.
-      * destruct Hx as [ | x Hx]; simpl in *; try lia.
-	destruct Hx. lia.
-      * destruct (eq_dec x m).
-	-- subst. apply Union_intror. constructor.
-	-- constructor. simpl. lia.
-  Qed.
 
-(** The cardinality of the set of natural
-    numbers less than [n] is [n] *)
+(*******************)
+(** ** Cardinality *)
+(*******************)
 
-Theorem cardinal_gt_n n : cardinal (gt n) n.
-Proof.
-  induction n as [ | n IH].
-  - replace (gt 0) with (Empty_set nat);
-      try constructor.
-    ex_ensembles x Hx; inversion Hx.
-  - replace (gt (S n)) with (Add (gt n) n).
-    + constructor; try assumption. unfold In. lia.
-    + ex_ensembles x Hx.
-      * destruct Hx; unfold In in *; try lia.
-	destruct H. lia.
-      * destruct (eq_dec x n).
-	-- subst. now apply Union_intror.
-	-- constructor. unfold In. lia.
-Qed.
+Definition set_card {C} `{SemiSet nat C} (A : C) n :=
+  exists2 l, (forall x, x ∈ A <-> x ∈ l) &
+  length (nodup eq_dec l) = n.
 
 
 (***************)
 (** ** Minimum *)
 (***************)
 
-Section minimum.
-  Variable A : Ensemble nat.
-
-  (** Minimum of an ensemble of nat *)
-
-  Definition minE m := A m /\ forall n, A n -> m <= n.
-
-  (** The minimum is unique *)
-
-  Theorem minE_unique n m :
-    minE n -> minE m -> n = m.
-  Proof. unfold minE. intuition auto using le_antisymm. Qed.
-
-  (** Every nonempty subset of nat has a minimum *)
-
-  Theorem well_ordering_principle : Inhabited A ->
-    exists m, minE m.
-  Proof.
-    intros I.
-    assert (E := dec_inh_nat_subset_has_unique_least_element A).
-    unfold has_unique_least_element in E.
-    unfold minE. destruct I. destruct E as [a Ha];
-      try eauto using classic.
-    destruct Ha. eauto.
-  Qed.
-
-End minimum.
+Definition set_min {C} `{SemiSet nat C} (A : C) m :=
+  m ∈ A /\ forall n, n ∈ A -> m <= n.
 
 
 (**********)
@@ -191,3 +123,56 @@ Proof.
   induction l; try reflexivity.
   simpl. rewrite sum_app. auto.
 Qed.
+
+
+(**
+Section minimum.
+  Variable A : Ensemble nat.
+
+  (** Minimum of an ensemble of nat *)
+
+  Definition minE m := A m /\ forall n, A n -> m <= n.
+
+  (** The minimum is unique *)
+
+  Theorem minE_unique n m :
+    minE n -> minE m -> n = m.
+  Proof. unfold minE. intuition auto using le_antisymm. Qed.
+
+  (** Every nonempty subset of nat has a minimum *)
+
+  Theorem well_ordering_principle : Inhabited A ->
+    exists m, minE m.
+  Proof.
+    intros I.
+    assert (E := dec_inh_nat_subset_has_unique_least_element A).
+    unfold has_unique_least_element in E.
+    unfold minE. destruct I. destruct E as [a Ha];
+      try eauto using classic.
+    destruct Ha. eauto.
+  Qed.
+
+End minimum.*)
+
+
+(** The cardinality of the set of natural
+    numbers less than [n] is [n] *)
+(**
+Theorem cardinal_gt_n n : cardinal (gt n) n.
+Proof.
+  induction n as [ | n IH].
+  - replace (gt 0) with (Empty_set nat);
+      try constructor.
+    ex_ensembles x Hx; inversion Hx.
+  - replace (gt (S n)) with (Add (gt n) n).
+    + constructor; try assumption. unfold In. lia.
+    + ex_ensembles x Hx.
+      * destruct Hx; unfold In in *; try lia.
+	destruct H. lia.
+      * destruct (eq_dec x n).
+	-- subst. now apply Union_intror.
+	-- constructor. unfold In. lia.
+Qed.
+
+
+*)
