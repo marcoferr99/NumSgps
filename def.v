@@ -1,45 +1,46 @@
-From Coq Require Export Sorting.
-From stdpp Require Export propset sorting.
-Require Export nat.
+Require Export list.
 From Coq Require Import Euclid.
+From stdpp Require Export sets.
+Export Nat.
 
 Generalizable No Variables.
+Generalizable Variables C M.
 
 
 (*************************************)
 (** * Numerical semigroup definition *)
 (*************************************)
 
-Class submonoid {C} `{ElemOf nat C} (A : C) : Prop := {
-  ns_zero : 0 ∈ A;
-  ns_closed : forall a b, a ∈ A -> b ∈ A -> a + b ∈ A
+Class submonoid `{ElemOf nat C} (M : C) : Prop := {
+  ns_zero : 0 ∈ M;
+  ns_closed : forall a b, a ∈ M -> b ∈ M -> a + b ∈ M
 }.
 
-Theorem ns_mul_closed {C} A `{submonoid C A} :
-  forall n m, m ∈ A -> n * m ∈ A.
+Theorem ns_mul_closed `{submonoid C M} :
+  forall n m, m ∈ M -> n * m ∈ M.
 Proof.
   intros. induction n.
   - rewrite mul_0_l. apply ns_zero.
   - now apply ns_closed.
 Qed.
 
-Class numerical_semigroup {C} (A : C) `{ElemOf nat C} : Type := {
-  ns_submonoid :: submonoid A;
+Class numerical_semigroup `{ElemOf nat C} (M : C) : Set := {
+  ns_submonoid :: submonoid M;
   gaps : list nat;
   sorted_gaps : Sorted lt gaps;
-  elem_of_gaps x : x ∈ A <-> x ∉ gaps
+  elem_of_gaps x : x ∈ M <-> x ∉ gaps
 }.
 
-Theorem ns_decision {C} A `{numerical_semigroup C A} x :
-  Decision (x ∈ A).
+Instance ns_Decision `{numerical_semigroup C M} x :
+  Decision (x ∈ M).
 Proof.
   destruct (elem_of_list_dec x gaps).
   - right. intros N. apply elem_of_gaps in N. auto.
   - left. apply elem_of_gaps. assumption.
 Qed.
 
-Theorem elem_of_gaps' {C} A `{numerical_semigroup C A} x :
-  x ∈ gaps <-> x ∉ A.
+Theorem elem_of_gaps' `{numerical_semigroup C M} x :
+  x ∈ gaps <-> x ∉ M.
 Proof.
   split; intros Ha.
   - intros N. apply elem_of_gaps in N. auto.
@@ -110,14 +111,14 @@ Proof.
 Qed.
 
 Section numerical_semigroup.
-  Context {C} A `{numerical_semigroup C A}.
+  Context `{numerical_semigroup C M}.
 
   Definition genus := length gaps.
 
   Definition multiplicity := multiplicity_aux 1 gaps.
 
-  Theorem multiplicity_min : multiplicity ∈ A /\
-    forall x, x ∈ A -> x <> 0 -> multiplicity <= x.
+  Theorem multiplicity_min : multiplicity ∈ M /\
+    forall x, x ∈ M -> x <> 0 -> multiplicity <= x.
   Proof.
     split.
     - apply elem_of_gaps.
@@ -143,33 +144,32 @@ End numerical_semigroup.
 
 (** Equivalent condition for a numerical semigroup *)
 
-Theorem numerical_semigroup_equiv {C} `{ElemOf nat C} (A : C) :
-  Logic.inhabited (numerical_semigroup A) <->
-  submonoid A /\ exists2 x, x ∈ A & S x ∈ A.
+Theorem numerical_semigroup_equiv1 `{numerical_semigroup C M} :
+  submonoid M /\ exists2 x, x ∈ M & S x ∈ M.
 Proof.
-  split.
-  - intros [NS]. split; [apply NS|].
-    remember gaps as l eqn : E. destruct l.
-    + exists 0; [apply ns_zero|].
-      eapply elem_of_gaps'. rewrite <- E. easy.
-    + assert (I : forall x, x > list_max gaps -> x ∈ A). {
-	intros x Hx.
-	apply list_max_lt in Hx; [|now rewrite <- E].
-	eapply elem_of_gaps'. intros N.
-	eapply Forall_forall in Hx; [|eassumption].
-	lia.
-      }
-      exists (conductor A); apply I;
-	unfold conductor;  rewrite <- E in *; lia.
-  - intros [NS [a Aa AS]]. constructor.
-    constructor; try assumption.
-    apply finite_definitive.
-    exists ((a - 1) * (a + 1)).
-    intros n Hn. apply not_elem_of_difference. right.
-    destruct a.
-    + replace n with (n * 1); try lia.
-      now eapply ns_mul_closed.
-    + assert (diveucl n (S a)) as [q r g e].
+  split; [tc_solve|].
+  destruct gaps eqn : E.
+  + exists 0; apply elem_of_gaps; now rewrite E.
+  + assert (I : forall x, x > list_max gaps -> x ∈ M). {
+      intros x Hx.
+      apply elem_of_gaps. now apply list_max_notin.
+    }
+    exists conductor; apply I;
+      unfold conductor; rewrite E in *; lia.
+Qed.
+
+Theorem numerical_semigroup_equiv2 `{submonoid C M} :
+  (forall x, Decision (x ∈ M)) ->
+  (exists2 x, x ∈ M & S x ∈ M) ->
+  Logic.inhabited (numerical_semigroup M).
+Proof.
+  intros D [a Aa AS]. constructor.
+  set (m := (a - 1) * (a + 1)).
+  assert (I : forall n, n >= m -> n ∈ M). {
+    intros n Hn. destruct a.
+    - replace n with (n * 1); [|lia].
+      now apply ns_mul_closed.
+    - assert (diveucl n (S a)) as [q r g e].
 	{ apply eucl_dev. trivial with arith. }
       assert (N : n = (q - r) * S a + r * (S (S a))). {
 	assert (q >= r). {
@@ -183,51 +183,57 @@ Proof.
 	now apply mul_le_mono_r.
       }
       rewrite N.
-      apply ns_closed; now eapply ns_mul_closed.
+      apply ns_closed; now apply ns_mul_closed.
+  }
+  set (l := merge_sort le (remove_dups ((filter (.∉ M) (seq 0 m))))).
+  apply Build_numerical_semigroup with (gaps := l).
+  - assumption.
+  - apply Sorted_le_lt. split.
+    + apply Sorted_merge_sort. intros ?. lia.
+    + unfold l. rewrite merge_sort_Permutation.
+      apply NoDup_remove_dups.
+  - intros x. subst l. rewrite merge_sort_Permutation.
+    rewrite elem_of_remove_dups.
+    rewrite elem_of_list_filter.
+    split; intros Hx; [intuition|].
+    destruct (D x); try assumption.
+    exfalso. apply Hx. split; try assumption.
+    destruct (le_gt_cases m x).
+    + exfalso. auto.
+    + apply elem_of_seq. lia.
 Qed.
-
-(** The set of even natural numbers is not a numerical semigroup *)
-
-(*Example even_not_numerical_semigroup {C} `{TopSet nat C} :
-  let E x := exists y, x = 2 * y in
-  ~ numerical_semigroup E.
-Proof.
-  intros E C.
-  destruct (numerical_semigroup_equiv E) as [NE _].
-  destruct NE as (_ & x & [a ->] & [b H]); try assumption.
-  lia.
-Qed.*)
 
 
 (*****************)
 (** * Generators *)
 (*****************)
 
-Section test.
-  Context `{SemiSet nat C}.
-Inductive generates (A : C) : nat -> Prop :=
-  generates_intro r x l
-    (IB : (forall i, i < r -> x i ∈ A)) :
-    generates A (sum (fun i => l i * x i) (seq 0 r)).
+Section generators.
+  Context `{ElemOf nat C} (A : C).
 
-Theorem generates_eq  (B : C) a r x l :
-  (forall i, i < r -> x i ∈ B) ->
-  a = sum (fun i => l i * x i) (seq 0 r) ->
-  generates B a.
-Proof. intros ? ->. easy. Qed.
-End test.
-Check generates_eq.
+  Inductive generates : nat -> Prop :=
+    generates_intro r x l
+      (IA : (forall i, i < r -> x i ∈ A)) :
+      generates (sum_list_with (fun i => l i * x i) (seq 0 r)).
 
-Theorem generates_in {C} A `{numerical_semigroup C A} B a :
-  B ⊆ A -> generates B a -> a ∈ A.
+  Theorem generates_eq a r x l :
+    (forall i, i < r -> x i ∈ A) ->
+    a = sum_list_with (fun i => l i * x i) (seq 0 r) ->
+    generates a.
+  Proof. now intros ? ->. Qed.
+
+End generators.
+
+Theorem generates_in `{numerical_semigroup C M} A a :
+  A ⊆ M -> generates A a -> a ∈ M.
 Proof.
   intros I G. inversion G. subst.
   clear G. induction r; [apply ns_zero|].
-  rewrite seq_S. rewrite sum_app. apply ns_closed.
-  - apply IHr. intros. apply IB. lia.
+  rewrite seq_S. rewrite sum_list_with_app.
+  apply ns_closed.
+  - apply IHr. intros. apply IA. lia.
   - simpl. rewrite add_0_r.
-    eapply ns_mul_closed; [tc_solve|].
-    apply I. apply IB. lia.
+    apply ns_mul_closed. apply I. apply IA. lia.
 Qed.
 
 (** Generator of a numerical semigroup *)
@@ -260,4 +266,16 @@ Proof.
     + destruct (elem_of_list_dec x l); try assumption.
       exfalso. apply Hx. assumption.
 Qed.
+
+(** The set of even natural numbers is not a numerical semigroup *)
+
+(*Example even_not_numerical_semigroup {C} `{TopSet nat C} :
+  let E x := exists y, x = 2 * y in
+  ~ numerical_semigroup E.
+Proof.
+  intros E C.
+  destruct (numerical_semigroup_equiv E) as [NE _].
+  destruct NE as (_ & x & [a ->] & [b H]); try assumption.
+  lia.
+Qed.*)
 

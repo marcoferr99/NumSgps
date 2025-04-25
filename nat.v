@@ -4,6 +4,7 @@ Export ListNotations Nat.
 From Coq Require Import Arith Lia ZArith.
 
 
+About elem_of_seq.
 (*************************)
 (** * Modular congruence *)
 (*************************)
