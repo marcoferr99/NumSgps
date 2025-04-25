@@ -1,7 +1,5 @@
-Require Export list.
+Require Export list nat.
 From Coq Require Import Euclid.
-From stdpp Require Export sets.
-Export Nat.
 
 Generalizable No Variables.
 Generalizable Variables C M.
@@ -11,7 +9,7 @@ Generalizable Variables C M.
 (** * Numerical semigroup definition *)
 (*************************************)
 
-Class submonoid `{ElemOf nat C} (M : C) : Prop := {
+Class submonoid `{Set_ nat C} (M : C) : Prop := {
   ns_zero : 0 ∈ M;
   ns_closed : forall a b, a ∈ M -> b ∈ M -> a + b ∈ M
 }.
@@ -24,7 +22,7 @@ Proof.
   - now apply ns_closed.
 Qed.
 
-Class numerical_semigroup `{ElemOf nat C} (M : C) : Set := {
+Class numerical_semigroup `{Set_ nat C} (M : C) : Set := {
   ns_submonoid :: submonoid M;
   gaps : list nat;
   sorted_gaps : Sorted lt gaps;
@@ -117,20 +115,25 @@ Section numerical_semigroup.
 
   Definition multiplicity := multiplicity_aux 1 gaps.
 
-  Theorem multiplicity_min : multiplicity ∈ M /\
-    forall x, x ∈ M -> x <> 0 -> multiplicity <= x.
+  Theorem multiplicity_min :
+    set_min (M ∖ {[0]}) multiplicity.
   Proof.
     split.
-    - apply elem_of_gaps.
-      apply (multiplicity_aux_notin 1);
-	[apply sorted_gaps|].
-      apply Forall_forall. intros x Hx.
-      assert (x <> 0); [|lia].
-      intros X. subst.
-      apply elem_of_gaps' in Hx. apply Hx. apply ns_zero.
-    - intros. apply multiplicity_aux_notin_le.
+    - apply elem_of_difference. split.
+      + apply elem_of_gaps.
+	apply (multiplicity_aux_notin 1);
+	  [apply sorted_gaps|].
+	apply Forall_forall. intros x Hx.
+	assert (x <> 0); [|lia].
+	intros X. subst.
+	apply elem_of_gaps' in Hx. apply Hx. apply ns_zero.
+      + intros N. apply elem_of_singleton in N.
+	generalize (multiplicity_aux_le 1 gaps).
+	unfold multiplicity in N. lia.
+    - intros n Hn. set_unfold in Hn.
+      apply multiplicity_aux_notin_le.
       + apply sorted_gaps.
-      + apply elem_of_gaps. assumption.
+      + now apply elem_of_gaps.
       + lia.
   Qed.
 
@@ -238,44 +241,5 @@ Qed.
 
 (** Generator of a numerical semigroup *)
 
-Definition generator {C} A `{numerical_semigroup C A} B :=
-  B ⊆ A /\ forall a, a ∈ A -> generates B a.
-
-
-(***********)
-(** * Gaps *)
-(***********)
-
-Definition l_numerical_semigroup (l : list nat) :=
-  NoDup l.
-
-Definition gaps_list {C} `{TopSet nat C} (l : list nat) :=
-  numerical_semigroup (top ∖ @list_to_set _ C _ _ _ l).
-
-Definition list_ns l (_ : Sorted lt l) (_ : submonoid {[n | n ∉ l]}) : propset nat :=
-  {[n | n ∉ l]}.
-
-Instance test l (S : Sorted lt l) (M : submonoid {[n | n ∉ l]}) : numerical_semigroup (list_ns l S M).
-Proof.
-  econstructor; try eassumption.
-  - intros x. destruct (elem_of_list_dec x l).
-    + right. intros N. destruct N. assumption.
-    + left. assumption.
-  - intros x. split; intros Hx.
-    + intros N. destruct N. assumption.
-    + destruct (elem_of_list_dec x l); try assumption.
-      exfalso. apply Hx. assumption.
-Qed.
-
-(** The set of even natural numbers is not a numerical semigroup *)
-
-(*Example even_not_numerical_semigroup {C} `{TopSet nat C} :
-  let E x := exists y, x = 2 * y in
-  ~ numerical_semigroup E.
-Proof.
-  intros E C.
-  destruct (numerical_semigroup_equiv E) as [NE _].
-  destruct NE as (_ & x & [a ->] & [b H]); try assumption.
-  lia.
-Qed.*)
-
+Definition generator `{numerical_semigroup C M} A :=
+  A ⊆ M /\ forall a, a ∈ M -> generates A a.

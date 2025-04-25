@@ -1,37 +1,38 @@
+Require Export def.
 From Coq Require Import Lia.
-Require Export def functions.
+From stdpp Require Import numbers propset.
+Require Import nat.
 
 
 Section apery.
-  Context A `{numerical_semigroup A} (n : nat).
+  Context `{numerical_semigroup C M} (n : nat).
 
   (** Apery set definition *)
 
-  Definition apery x := A x /\ (n <= x -> ~ A (x - n)).
+  Definition apery :=
+    {[x | x ∈ M ∧ (n <= x -> x - n ∉ M)]}.
 
   (** The apery set of [n] does not contain two
       different numbers that are congruent modulo [n] *)
 
-  Theorem apery_congr_unique a b : A n ->
-    apery a -> apery b -> congr_mod n a b -> a = b.
+  Theorem apery_congr_unique a b : n ∈ M ->
+    a ∈ apery -> b ∈ apery -> a mod n = b mod n -> a = b.
   Proof.
-    intros An.
+    intros Mn.
     assert (T :
-      forall a b, apery a -> apery b -> a <= b ->
-      congr_mod n a b -> a = b
+      forall a b, a ∈ apery -> b ∈ apery -> a <= b ->
+      a mod n = b mod n -> a = b
     ). {
-      clear a b. intros a b Aa Ab L C.
+      clear a b. intros a b Aa Ab L N.
       destruct (le_gt_cases n b) as [Ln | Lb].
-      - apply Ab in Ln.
-	apply congr_mod_divide in C. destruct C as [k Hk].
-	destruct k; try lia.
-	exfalso. apply Ln.
+      - destruct Ab as [_ Hb]. apply Hb in Ln.
+	apply congr_mod_divide in N. destruct N as [k Hk].
+	destruct k; try lia. exfalso. apply Ln.
 	replace (b - n) with (k * n + a); try lia.
-	apply ns_closed; try apply Aa.
-	clear Hk Ln. induction k; now apply H.
+	apply ns_closed; [now apply ns_mul_closed|].
+	now destruct Aa.
       - destruct (le_gt_cases n a); try lia.
-        unfold congr_mod in C.
-	do 2 rewrite mod_small in C; assumption.
+	do 2 rewrite mod_small in N; assumption.
     }
     intros. destruct (le_ge_cases a b); try auto.
     symmetry. auto with congr_mod.
@@ -41,7 +42,7 @@ Section apery.
       is congruent to [i] modulo [n] *)
 
   Definition apery_min i w :=
-    minE (fun x => A x /\ congr_mod n x i) w.
+    set_min {[x | x ∈ M ∧ congr_mod n x i]} w.
 
   Theorem apery_min_exists : n <> 0 ->
     forall i, exists w, apery_min i w.
