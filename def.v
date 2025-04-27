@@ -2,19 +2,19 @@ Require Export list nat.
 From Coq Require Import Euclid.
 
 Generalizable No Variables.
-Generalizable Variables C M.
+Generalizable Variable M.
 
 
 (*************************************)
 (** * Numerical semigroup definition *)
 (*************************************)
 
-Class submonoid `{Set_ nat C} (M : C) : Prop := {
+Class submonoid (M : propset nat) : Prop := {
   ns_zero : 0 ∈ M;
   ns_closed : forall a b, a ∈ M -> b ∈ M -> a + b ∈ M
 }.
 
-Theorem ns_mul_closed `{submonoid C M} :
+Theorem ns_mul_closed `{submonoid M} :
   forall n m, m ∈ M -> n * m ∈ M.
 Proof.
   intros. induction n.
@@ -22,14 +22,14 @@ Proof.
   - now apply ns_closed.
 Qed.
 
-Class numerical_semigroup `{Set_ nat C} (M : C) : Set := {
+Class numerical_semigroup M : Set := {
   ns_submonoid :: submonoid M;
   gaps : list nat;
   sorted_gaps : Sorted lt gaps;
   elem_of_gaps x : x ∈ M <-> x ∉ gaps
 }.
 
-Instance ns_Decision `{numerical_semigroup C M} x :
+Instance ns_Decision `{numerical_semigroup M} x :
   Decision (x ∈ M).
 Proof.
   destruct (elem_of_list_dec x gaps).
@@ -37,7 +37,7 @@ Proof.
   - left. apply elem_of_gaps. assumption.
 Qed.
 
-Theorem elem_of_gaps' `{numerical_semigroup C M} x :
+Theorem elem_of_gaps' `{numerical_semigroup M} x :
   x ∈ gaps <-> x ∉ M.
 Proof.
   split; intros Ha.
@@ -109,7 +109,7 @@ Proof.
 Qed.
 
 Section numerical_semigroup.
-  Context `{numerical_semigroup C M}.
+  Context `{numerical_semigroup M}.
 
   Definition genus := length gaps.
 
@@ -143,11 +143,18 @@ Section numerical_semigroup.
     | h :: t => S (list_max gaps)
     end.
 
+  Theorem conductor_le_in x : conductor <= x -> x ∈ M.
+  Proof.
+    unfold conductor. intros L.
+    apply elem_of_gaps. destruct gaps eqn : E; [easy|].
+    apply list_max_notin. lia.
+  Qed.
+
 End numerical_semigroup.
 
 (** Equivalent condition for a numerical semigroup *)
 
-Theorem numerical_semigroup_equiv1 `{numerical_semigroup C M} :
+Theorem numerical_semigroup_equiv1 `{numerical_semigroup M} :
   submonoid M /\ exists2 x, x ∈ M & S x ∈ M.
 Proof.
   split; [tc_solve|].
@@ -161,7 +168,7 @@ Proof.
       unfold conductor; rewrite E in *; lia.
 Qed.
 
-Theorem numerical_semigroup_equiv2 `{submonoid C M} :
+Theorem numerical_semigroup_equiv2 `{submonoid M} :
   (forall x, Decision (x ∈ M)) ->
   (exists2 x, x ∈ M & S x ∈ M) ->
   Logic.inhabited (numerical_semigroup M).
@@ -212,7 +219,7 @@ Qed.
 (*****************)
 
 Section generators.
-  Context `{ElemOf nat C} (A : C).
+  Context (A : propset nat).
 
   Inductive generates : nat -> Prop :=
     generates_intro r x l
@@ -227,7 +234,7 @@ Section generators.
 
 End generators.
 
-Theorem generates_in `{numerical_semigroup C M} A a :
+Theorem generates_in `{numerical_semigroup M} A a :
   A ⊆ M -> generates A a -> a ∈ M.
 Proof.
   intros I G. inversion G. subst.
@@ -241,5 +248,5 @@ Qed.
 
 (** Generator of a numerical semigroup *)
 
-Definition generator `{numerical_semigroup C M} A :=
+Definition generator `{numerical_semigroup M} A :=
   A ⊆ M /\ forall a, a ∈ M -> generates A a.
