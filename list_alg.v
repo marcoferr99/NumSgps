@@ -1,5 +1,5 @@
 From Coq Require Import Lia.
-Require Export list.
+Require Export list_nat.
 
 
 (**********************)
@@ -9,7 +9,7 @@ Require Export list.
 Section nh.
   Context (max : nat).
   Local Notation Forall_max := (Forall (ge max)).
-  Local Notation sorted := (LocallySorted ge).
+  Local Notation sorted := (Sorted ge).
   Local Notation nth n l := (nth n l 0).
 
 
@@ -76,14 +76,15 @@ Section nh.
   Theorem next_sorted l : sorted l -> sorted (next l).
   Proof.
     intros L.
-    induction l as [ | h t IH]; simpl; [constructor | ].
+    induction l as [ | h t IH]; simpl;
+      [constructor; constructor|].
+    inversion L as [|? ? ? Hd].
     destruct (ltb_spec h max).
-    - destruct t; constructor; inversion L; try assumption.
-      lia.
+    - constructor; [assumption|].
+      inversion Hd; constructor. lia.
     - remember (next t) as nt.
-      destruct nt; constructor; try lia.
-      apply IH. inversion L; try constructor.
-      assumption.
+      destruct nt; constructor; [auto|].
+      constructor. lia.
   Qed.
 
   Theorem next_length l : length (next l) = length l \/
@@ -118,8 +119,9 @@ Section nh.
     assert (repeat_sorted :
       forall n m, sorted (repeat n m)
     ). {
-      clear. intros. induction m; try constructor.
-      simpl. remember (repeat n m) as r eqn : Er.
+      clear. intros.
+      induction m; simpl; constructor; [assumption|].
+      remember (repeat n m) as r eqn : Er.
       destruct r; constructor; try assumption.
       destruct m; try discriminate. injection Er. lia.
     }
@@ -128,15 +130,13 @@ Section nh.
       nth n l <= nth m l
     ). {
       clear. intros l L.
-      apply Sorted_LocallySorted_iff in L.
       apply Sorted_StronglySorted in L.
       2: { unfold Transitive. lia. }
       induction l; intros m n Lm Ln Le;
 	try (simpl in *; lia).
       inversion L. subst. destruct m, n; simpl; try lia.
       - simpl in Ln.
-	eapply (Forall_nth (ge a) l) in H2;
-	  try eassumption.
+	eapply Forall_nth in H2; try eassumption.
 	lia.
       - apply IHl; simpl in *; try assumption; lia.
     }
@@ -147,13 +147,15 @@ Section nh.
       - replace a with 0; try lia. assumption.
       - destruct (eq_dec a (S b)); try (subst; assumption).
 	apply IHb; try lia. generalize Sb. clear.
-	intros Sb. induction l; intros; [constructor | ].
+	intros Sb.
+	induction l; intros; [constructor;constructor|].
 	simpl. destruct l.
-	+ constructor; try constructor.
-	  inversion Sb. lia.
+	+ constructor; constructor; try constructor.
+	  inversion Sb as [|? ? ? Hd].
+	  inversion Hd. lia.
 	+ simpl. inversion Sb. subst.
-	  constructor; try assumption.
-	  apply IHl. assumption.
+	  constructor; [auto|].
+	  inversion H2. constructor. assumption.
     }
     assert (sorted_app_r :
       forall l h, sorted (l ++ h) -> sorted h
@@ -194,11 +196,12 @@ Section nh.
       - destruct (leb_spec m a); try lia.
 	eapply le_trans.
 	+ apply IHl; try eassumption.
-	  inversion SR; [constructor | assumption].
-	+ inversion SR; subst; simpl in *;
-	    [lia | assumption].
+	  inversion SR. assumption.
+	+ inversion SR; subst; simpl in *.
+	  destruct l; simpl; [lia|].
+	  inversion H3. assumption.
       - apply IHl.
-	+ inversion SR; [constructor | assumption].
+	+ inversion SR. assumption.
 	+ destruct (leb_spec m a); lia.
     }
     assert (ml_nth_lt : forall l m n, sorted l ->
@@ -208,7 +211,7 @@ Section nh.
       induction l; intros m n SR LN L; simpl in *; try lia.
       destruct (leb_spec m a); destruct n; try lia.
       - apply IHl; try lia.
-	inversion SR; [constructor | assumption].
+	inversion SR. assumption.
       - assert (Sn : 0 <= S n); try lia.
 	eapply sorted_nth in Sn; try eassumption;
 	  simpl in *; lia.
@@ -240,7 +243,7 @@ Section nh.
       forall i, i <= m -> Forall (le i) (firstn (k m) l)
     ). {
       intros l m k L Hl i Hi.
-      apply Forall_nth. intros j d Hj.
+      apply List.Forall_nth. intros j d Hj.
       rewrite (nth_indep _ _ 0); try assumption. clear d.
       apply mlk_Sk in Hl as MS. apply mlk_lt in Hl as ML.
       rewrite firstn_length_le in Hj; try lia.
@@ -254,7 +257,7 @@ Section nh.
       Forall (gt m) (skipn (S (k m)) l)
     ). {
       intros l m k L Hl.
-      apply Forall_nth. intros i d Hi.
+      apply List.Forall_nth. intros i d Hi.
       rewrite (nth_indep _ _ 0); try assumption. clear d.
       rewrite nth_skipn. apply mlk_Sk in Hl.
       rewrite length_skipn in Hi.
@@ -282,17 +285,17 @@ Section nh.
 	  clear E. destruct s.
 	  + rewrite app_nil_r. apply repeat_sorted.
 	  + inversion FS. lia.
-	- apply LocallySorted_middle.
+	- apply Sorted_middle.
 	  + apply sorted_app_le with max; try lia.
 	    replace [max] with (repeat max 1);
 	      try reflexivity.
 	    rewrite <- repeat_app. apply repeat_sorted.
 	  + remember (skipn (S (k (S m))) l) as s eqn : E.
-	    destruct s; constructor.
+	    constructor.
 	    * rewrite E.
 	      rewrite <- (firstn_skipn (S (k (S m)))) in L.
 	      apply sorted_app_r in L. assumption.
-	    * inversion FS. lia.
+	    * inversion FS; constructor. lia.
       }
       apply H; try assumption.
       - subst h. apply Forall_app. split.
@@ -539,4 +542,3 @@ Section nh.
   Qed.
 
 End nh.
-

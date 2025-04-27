@@ -1,12 +1,15 @@
 From Coq Require Import Lia.
 Require Export def list_alg.
  
+Generalizable No Variables.
+Generalizable Variables M.
 
 Section generators.
-  Context (gen : list nat).
+  Context `{numerical_semigroup M}.
+  Variables (gen : list nat).
+  Hypothesis (G : generator gen).
   Local Notation mlt := (list_min gen).
-  Context (M : mlt <> 0).
-  Local Notation nth n l := (nth n l 0).
+  Hypothesis (m0 : mlt <> 0).
   Local Notation nh := (nh (length gen - 1)).
 
   Theorem gen_neq : gen <> [].
@@ -18,11 +21,11 @@ Section generators.
     apply gen_neq, length_zero_iff_nil. assumption.
   Qed.
 
-  Definition nhsum n := sum (fun i => nth i gen) (nh n).
+  Definition nhsum n := sum_list_with (gen !!!.) (nh n).
 
   Theorem nh_Forall_gt n : Forall (gt (length gen)) (nh n).
   Proof.
-    apply Forall_nth. intros.
+    apply List.Forall_nth. intros.
     generalize (nh_Forall (length gen - 1) n). intros F.
     eapply Forall_nth with (d := d) in F; try eassumption.
     generalize length_gen_neq. lia.
@@ -39,87 +42,90 @@ Section generators.
     inversion F. subst. eapply le_trans.
     - apply add_le_mono_l. apply IHh. assumption.
     - apply add_le_mono_r. apply list_min_le.
-      apply nth_In. assumption.
+      now apply elem_of_list_lookup_total_2.
   Qed.
 
-  Section numerical_semigroup.
-    Context A `{NS : numerical_semigroup A}
-      (G : generator A (Inl gen)).
+  Theorem nhsum_in : forall n, nhsum n ∈ M.
+  Proof.
+    intros. unfold nhsum.
+    generalize (nh_Forall_gt n). intros F.
+    remember (nh n) as ls eqn : E.
+    remember (length ls) as ln eqn : En. clear E.
+    generalize dependent ls.
+    induction ln as [ | ln IH]; intros.
+    + symmetry in En. apply length_zero_iff_nil in En.
+      subst. simpl. apply ns_zero.
+    + intros. destruct ls; try discriminate.
+      inversion F. subst. simpl. apply ns_closed.
+      * destruct G as [G1 _]. apply G.
+	apply elem_of_list_lookup_total_2. lia.
+      * apply IH; auto.
+  Qed.
 
-    Theorem nhsum_in : forall n, A (nhsum n).
-    Proof.
-      intros. unfold nhsum.
-      generalize (nh_Forall_gt n). intros F.
-      remember (nh n) as ls eqn : E.
-      remember (length ls) as ln eqn : En. clear E.
-      generalize dependent ls.
-      induction ln as [ | ln IH]; intros.
-      + symmetry in En. apply length_zero_iff_nil in En.
-	subst. simpl. apply ns_zero.
-      + intros. destruct ls; try discriminate.
-	inversion F. subst. simpl. apply ns_closed.
-	* destruct G as [G1 _]. apply G.
-	  apply nth_In. lia.
-	* apply IH; auto.
-    Qed.
+  Theorem list_lookup_total_nth l i :
+    l !!! i = nth i l 0.
+  Proof.
+    destruct (l !! i) eqn : E.
+    - apply list_lookup_total_correct.
+      rewrite nth_lookup. unfold default. rewrite E.
+      reflexivity.
+    - rewrite list_lookup_total_alt. unfold default.
+      rewrite E. rewrite nth_lookup.
+      unfold inhabitant, inhabited. rewrite E.
+      reflexivity.
+  Qed.
 
-    Theorem nhsum_all a : A a -> exists n, nhsum n = a.
-    Proof.
-      intros Aa. destruct G as [_ G2].
-      destruct (G2 a Aa) as [r x k Hr].
-      set (l := flat_map (fun i => repeat (nth_inv 0 gen (x i)) (k i)) (seq 0 r)).
-      set (ol := rev (sort l)).
-      destruct (nh_all (length gen - 1) ol) as [n Hn].
-      - apply Forall_impl with (P := gt (length gen));
-	  try (intros; lia).
-	subst ol. apply Forall_rev.
-	generalize (Permuted_sort l). intros P.
-	eapply Permutation_Forall; try eassumption.
-	unfold l. apply Forall_flat_map.
-	apply Forall_nth. intros.
-	rewrite (nth_indep _ _ 0); try lia.
-	apply Forall_repeat. apply nth_inv_lt.
-	apply Hr. rewrite length_seq in H.
-	rewrite seq_nth; lia.
-      - subst ol. apply LocallySorted_rev. clear.
-	generalize (LocallySorted_sort l). intros L.
-	eapply LocallySorted_iff; try eassumption.
-	intros. unfold is_true. fold leb.
-	destruct (leb_spec x0 y); lia.
-      - exists n. unfold nhsum. rewrite Hn. clear n Hn.
-	rewrite (sum_Permutation _ _ l).
-	+ subst l. rewrite sum_flat_map.
-	  clear Aa. induction r; try reflexivity.
-	  rewrite seq_S. repeat rewrite sum_app. f_equal.
-	  * apply IHr. clear IHr. intros. apply Hr. lia.
-	  * clear IHr. simpl.
-	    remember (k r) as kr eqn : E. clear E.
-	    generalize Hr. clear. intros.
-	    induction kr; try reflexivity.
-	    simpl. unfold Inl in *.
-	    rewrite nth_nth_inv; auto.
-	    f_equal. f_equal. repeat rewrite add_0_r in IHkr.
-	    assumption.
-	+ subst ol. eapply Permutation_trans; symmetry.
-	  * apply Permutation_rev.
-	  * apply Permuted_sort.
-    Qed.
+  Theorem nhsum_all a : a ∈ M -> exists n, nhsum n = a.
+  Proof.
+    intros Aa. destruct G as [_ G2].
+    destruct (G2 a Aa) as [r x k Hr].
+    set (l := flat_map (fun i => repeat (lookup_inv gen (x i)) (k i)) (seq 0 r)).
+    set (ol := reverse (merge_sort le l)).
+    destruct (nh_all (length gen - 1) ol) as [n Hn].
+    - apply Forall_impl with (P := gt (length gen));
+	try (intros; lia).
+      subst ol. apply Forall_reverse.
+      rewrite merge_sort_Permutation.
+      unfold l. apply Forall_flat_map.
+      apply Forall_forall. intros.
+      apply Forall_repeat.
+      apply lookup_inv_lt.
+      apply Hr.
+      apply elem_of_seq in H0. lia.
+    - subst ol. apply Sorted_reverse. clear.
+      apply Sorted_merge_sort. intros ?. lia.
+    - exists n. unfold nhsum. rewrite Hn. clear n Hn.
+      rewrite (Permutation_sum_list_with _ _ l).
+      + subst l. rewrite sum_list_with_flat_map.
+	clear Aa. induction r; try reflexivity.
+	rewrite seq_S.
+	repeat rewrite sum_list_with_app. f_equal.
+	* apply IHr. clear IHr. intros. apply Hr. lia.
+	* clear IHr. simpl.
+	  remember (k r) as kr eqn : E. clear E.
+	  generalize Hr. clear. intros.
+	  induction kr; try reflexivity.
+	  simpl. rewrite lookup_lookup_inv; [|auto].
+	  do 2 f_equal.
+	  repeat rewrite add_0_r in IHkr. assumption.
+      + subst ol. eapply Permutation_trans; symmetry.
+	* symmetry. apply reverse_Permutation.
+	* symmetry. apply merge_sort_Permutation.
+  Qed.
 
-    Theorem nhsum_all_limit m a :
-      A a -> a < nth_limit m ->
-      exists n, n < m /\ nhsum n = a.
-    Proof.
-      intros Aa L.
-      destruct (nhsum_all a) as [n Hn]; try assumption.
-      exists n. split; try assumption. subst.
-      destruct (le_gt_cases m n); try assumption.
-      apply Arith_base.lt_not_le_stt in L.
-      exfalso. apply L.
-      eapply le_trans. 2:{ apply nhsum_le. }
-      apply mul_le_mono_r. apply nh_le_length. assumption.
-    Qed.
-
-  End numerical_semigroup.
+  Theorem nhsum_all_limit m a :
+    a ∈ M -> a < nth_limit m ->
+    exists n, n < m /\ nhsum n = a.
+  Proof.
+    intros Aa L.
+    destruct (nhsum_all a) as [n Hn]; try assumption.
+    exists n. split; try assumption. subst.
+    destruct (le_gt_cases m n); try assumption.
+    apply Arith_base.lt_not_le_stt in L.
+    exfalso. apply L.
+    eapply le_trans. 2:{ apply nhsum_le. }
+    apply mul_le_mono_r. apply nh_le_length. assumption.
+  Qed.
 
   Fixpoint small_list_aux n :=
     match n with
@@ -128,32 +134,31 @@ Section generators.
     end.
 
   Definition small_list n :=
-    sorted_nodup (sort (small_list_aux n)).
+    sorted_nodup (merge_sort le (small_list_aux n)).
 
   Definition small_list_limit n :=
-    filter (fun x => x <? nth_limit n) (small_list n).
+    filter (fun x => x <= nth_limit n) (small_list n).
 
   Theorem small_list_limit_sorted n :
-    LocallySorted le (small_list_limit n).
+    Sorted le (small_list_limit n).
   Proof.
-    apply StronglySorted_LocallySorted.
+    apply StronglySorted_Sorted.
     apply StronglySorted_filter.
-    apply LocallySorted_StronglySorted.
-    - intros x. lia.
-    - unfold small_list.
-      apply LocallySorted_le_sorted_nodup.
-      apply LocallySorted_sort.
+    apply Sorted_StronglySorted; [intros ?; lia|].
+    unfold small_list.
+    apply Sorted_le_sorted_nodup.
+    apply Sorted_merge_sort.
+    intros ?. lia.
   Qed.
 
   Theorem small_list_limit_sorted_lt n :
     StronglySorted lt (small_list_limit n).
   Proof.
-    apply LocallySorted_StronglySorted.
-    - intros x. lia.
-    - apply LocallySorted_le_NoDup_lt.
-      + apply small_list_limit_sorted.
-      + apply NoDup_filter. apply sorted_nodup_NoDup.
-	apply LocallySorted_sort.
+    apply Sorted_StronglySorted; [intros ?; lia|].
+    apply Sorted_le_lt. split.
+    - apply small_list_limit_sorted.
+    - apply NoDup_filter. apply sorted_nodup_NoDup.
+      apply Sorted_merge_sort. intros ?. lia.
   Qed.
 
   Definition last_element_pos i :=

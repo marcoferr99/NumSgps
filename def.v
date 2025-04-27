@@ -1,8 +1,8 @@
-Require Export list nat.
+Require Export list_nat nat.
 From Coq Require Import Euclid.
 
 Generalizable No Variables.
-Generalizable Variable M.
+Generalizable Variable C M.
 
 
 (*************************************)
@@ -219,7 +219,7 @@ Qed.
 (*****************)
 
 Section generators.
-  Context (A : propset nat).
+  Context `{ElemOf nat C} (A : C).
 
   Inductive generates : nat -> Prop :=
     generates_intro r x l
@@ -248,5 +248,6 @@ Qed.
 
 (** Generator of a numerical semigroup *)
 
-Definition generator `{numerical_semigroup M} A :=
-  A ⊆ M /\ forall a, a ∈ M -> generates A a.
+Definition generator `{numerical_semigroup M} `{ElemOf nat C} (A : C) :=
+  (forall x, x ∈ A -> x ∈ M) /\
+  forall a, a ∈ M -> generates A a.

@@ -260,7 +260,7 @@ Section apery.
 End apery.
 
 
-Theorem finite_gen `{numerical_semigroup M} : exists A, set_finite A /\ generator A.
+Theorem finite_gen `{numerical_semigroup M} : exists A : propset nat, set_finite A /\ generator A.
 Proof.
   assert (exists n, n ∈ M /\ n <> 0) as [n [Mn n0]]. {
     exists (S conductor). split; [|easy].
