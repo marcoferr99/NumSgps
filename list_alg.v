@@ -7,10 +7,9 @@ Require Export list_nat.
 (**********************)
 
 Section nh.
-  Context (max : nat).
+  Variable (max : nat).
   Local Notation Forall_max := (Forall (ge max)).
   Local Notation sorted := (Sorted ge).
-  Local Notation nth n l := (nth n l 0).
 
 
   (*****************)
@@ -19,6 +18,7 @@ Section nh.
 
   (** Increase the first number in the list [l] that is less than [max] and set
       all the previous elements to that same (increased) value *)
+
   Fixpoint next l :=
     match l with
     | [] => [0]
@@ -121,22 +121,19 @@ Section nh.
     ). {
       clear. intros.
       induction m; simpl; constructor; [assumption|].
-      remember (repeat n m) as r eqn : Er.
-      destruct r; constructor; try assumption.
-      destruct m; try discriminate. injection Er. lia.
+      destruct m; simpl; constructor. auto.
     }
-    assert (sorted_nth : forall l, sorted l ->
+    assert (sorted_lookup : forall l, sorted l ->
       forall m n, m < length l -> n < length l -> m <= n ->
-      nth n l <= nth m l
+      l !!! n <= l !!! m
     ). {
       clear. intros l L.
-      apply Sorted_StronglySorted in L.
-      2: { unfold Transitive. lia. }
-      induction l; intros m n Lm Ln Le;
-	try (simpl in *; lia).
-      inversion L. subst. destruct m, n; simpl; try lia.
+      apply Sorted_StronglySorted in L; [|intros ?; lia].
+      induction l; intros m n Lm Ln Le; [simpl in *; lia|].
+      inversion L as [|? ? ? F]. subst.
+      destruct m, n; simpl; try lia.
       - simpl in Ln.
-	eapply Forall_nth in H2; try eassumption.
+	eapply Forall_lookup_total_1 in F; [eassumption|].
 	lia.
       - apply IHl; simpl in *; try assumption; lia.
     }
@@ -144,25 +141,23 @@ Section nh.
       sorted (l ++ [b]) -> sorted (l ++ [a])
     ). {
       clear. induction b; intros a L Sb.
-      - replace a with 0; try lia. assumption.
-      - destruct (eq_dec a (S b)); try (subst; assumption).
-	apply IHb; try lia. generalize Sb. clear.
-	intros Sb.
+      - replace a with 0; [assumption|lia].
+      - destruct (eq_dec a (S b)); [subst; assumption|].
+	apply IHb; [lia|].
+	generalize Sb. clear. intros Sb.
 	induction l; intros; [constructor;constructor|].
 	simpl. destruct l.
 	+ constructor; constructor; try constructor.
-	  inversion Sb as [|? ? ? Hd].
-	  inversion Hd. lia.
-	+ simpl. inversion Sb. subst.
+	  inversion Sb as [|? ? ? Hd]. inversion Hd. lia.
+	+ simpl. inversion Sb as [|? ? ? Hd]. subst.
 	  constructor; [auto|].
-	  inversion H2. constructor. assumption.
+	  inversion Hd. constructor. assumption.
     }
     assert (sorted_app_r :
       forall l h, sorted (l ++ h) -> sorted h
     ). {
-      clear. intros. induction l; try assumption.
-      inversion H; apply IHl;
-	inversion H; try constructor; assumption.
+      clear. intros. induction l; [assumption|].
+      inversion H; now apply IHl.
     }
     set (
       ml := fix ml m l :=
@@ -178,7 +173,7 @@ Section nh.
     assert (ml_le :
       forall l n m, n <= m -> ml m l <= ml n l
     ). {
-      clear. intros. induction l; auto. simpl.
+      clear. intros. induction l; [auto|]. simpl.
       destruct (leb_spec m a), (leb_spec n a); lia.
     }
     assert (ml_app :
@@ -187,33 +182,32 @@ Section nh.
       clear. intros. induction l; try reflexivity.
       simpl. destruct (leb_spec m a); lia.
     }
-    assert (ml_nth_ge : forall l m n, sorted l ->
-      n < ml m l -> nth n l >= m
+    assert (ml_lookup_ge : forall l m n, sorted l ->
+      n < ml m l -> l !!! n >= m
     ). {
       clear.
-      induction l; intros m n SR L; simpl in L; try lia.
-      simpl. destruct n.
-      - destruct (leb_spec m a); try lia.
+      induction l; intros m n SR L; simpl in L; [lia|].
+      destruct n; simpl.
+      - destruct (leb_spec m a); [assumption|].
 	eapply le_trans.
 	+ apply IHl; try eassumption.
-	  inversion SR. assumption.
-	+ inversion SR; subst; simpl in *.
-	  destruct l; simpl; [lia|].
-	  inversion H3. assumption.
+	  now inversion SR.
+	+ inversion SR as [|? ? ? Hd]; subst; simpl in *.
+	  destruct l; simpl; [lia|]. now inversion Hd.
       - apply IHl.
-	+ inversion SR. assumption.
+	+ now inversion SR.
 	+ destruct (leb_spec m a); lia.
     }
-    assert (ml_nth_lt : forall l m n, sorted l ->
-      n < length l -> n >= ml m l -> nth n l < m
+    assert (ml_lookup_lt : forall l m n, sorted l ->
+      n < length l -> n >= ml m l -> l !!! n < m
     ). {
-      generalize sorted_nth. clear. intros sorted_nth.
-      induction l; intros m n SR LN L; simpl in *; try lia.
-      destruct (leb_spec m a); destruct n; try lia.
-      - apply IHl; try lia.
-	inversion SR. assumption.
-      - assert (Sn : 0 <= S n); try lia.
-	eapply sorted_nth in Sn; try eassumption;
+      generalize sorted_lookup. clear.
+      intros sorted_lookup.
+      induction l; intros m n SR LN L; simpl in *; [lia|].
+      destruct (leb_spec m a); destruct n; simpl; try lia.
+      - apply IHl; try lia. now inversion SR.
+      - assert (Sn : 0 <= S n); [lia|].
+	eapply sorted_lookup in Sn; try eassumption;
 	  simpl in *; lia.
     }
     set (mlk m k l := forall i, i <= m -> ml i l = k i).
@@ -243,25 +237,23 @@ Section nh.
       forall i, i <= m -> Forall (le i) (firstn (k m) l)
     ). {
       intros l m k L Hl i Hi.
-      apply List.Forall_nth. intros j d Hj.
-      rewrite (nth_indep _ _ 0); try assumption. clear d.
+      eapply Forall_lookup_total_2.
+      intros j Hj.
       apply mlk_Sk in Hl as MS. apply mlk_lt in Hl as ML.
-      rewrite firstn_length_le in Hj; try lia.
-      rewrite nth_firstn.
-      destruct (ltb_spec j (k m)); try lia.
-      apply ml_nth_ge; try assumption.
+      rewrite length_take_le in Hj; [|lia].
+      rewrite lookup_total_take; [|assumption].
+      apply ml_lookup_ge; try assumption.
       apply (ml_le l) in Hi. lia.
     }
     assert (FS :
       forall l m k, sorted l -> mlk m (Sk m k) l ->
-      Forall (gt m) (skipn (S (k m)) l)
+      Forall (gt m) (drop (S (k m)) l)
     ). {
       intros l m k L Hl.
-      apply List.Forall_nth. intros i d Hi.
-      rewrite (nth_indep _ _ 0); try assumption. clear d.
-      rewrite nth_skipn. apply mlk_Sk in Hl.
-      rewrite length_skipn in Hi.
-      apply ml_nth_lt; try assumption; lia.
+      eapply Forall_lookup_total_2. intros i Hi.
+      rewrite lookup_total_drop.
+      apply mlk_Sk in Hl. rewrite length_drop in Hi.
+      apply ml_lookup_lt; try assumption; lia.
     }
 
     assert (GR :
