@@ -5,7 +5,7 @@ Require Import nat.
 
 
 Section apery.
-  Context M `{numerical_semigroup M} (n : nat).
+  Context {C} M `{numerical_semigroup C M} (n : nat).
 
   (** Apery set definition *)
 

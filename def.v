@@ -2,7 +2,7 @@ Require Export list_nat nat.
 From Coq Require Import Euclid.
 
 Generalizable No Variables.
-Generalizable Variables C M.
+Generalizable Variables C D M.
 
 
 (*************************************)
@@ -93,7 +93,7 @@ End numerical_semigroup.
 
 (** Equivalent condition for a numerical semigroup *)
 
-Theorem numerical_semigroup_equiv1 `{numerical_semigroup M} :
+Theorem numerical_semigroup_equiv1 `{numerical_semigroup C M} :
   submonoid M /\ exists2 x, x ∈ M & S x ∈ M.
 Proof.
   split; [tc_solve|].
@@ -107,7 +107,7 @@ Proof.
       unfold conductor; rewrite E in *; lia.
 Qed.
 
-Theorem numerical_semigroup_equiv2 `{submonoid M} :
+Theorem numerical_semigroup_equiv2 `{submonoid C M} :
   (forall x, Decision (x ∈ M)) ->
   (exists2 x, x ∈ M & S x ∈ M) ->
   Logic.inhabited (numerical_semigroup M).
@@ -173,10 +173,11 @@ Section generators.
 
 End generators.
 
-Theorem generates_in `{numerical_semigroup M} A a :
-  A ⊆ M -> generates A a -> a ∈ M.
+Theorem generates_in `{numerical_semigroup C M} `{ElemOf nat D} (A : D) :
+  (forall x, x ∈ A -> x ∈ M) ->
+  forall a, generates A a -> a ∈ M.
 Proof.
-  intros I G. inversion G. subst.
+  intros I a G. inversion G. subst.
   clear G. induction r; [apply ns_zero|].
   rewrite seq_S. rewrite sum_list_with_app.
   apply ns_closed.
@@ -187,6 +188,6 @@ Qed.
 
 (** Generator of a numerical semigroup *)
 
-Definition generator `{numerical_semigroup M} `{ElemOf nat C} (A : C) :=
+Definition generator `{numerical_semigroup C M} `{ElemOf nat D} (A : D) :=
   (forall x, x ∈ A -> x ∈ M) /\
   forall a, a ∈ M -> generates A a.
