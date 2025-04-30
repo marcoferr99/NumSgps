@@ -5,39 +5,32 @@ From stdpp Require Export list sorting.
 (** * Generic list facts *)
 (*************************)
 
-Theorem lookup_total_nth {T} `{!Inhabited T} (l : list T) n :
+Theorem lookup_total_nth {T} `{Inhabited T} (l : list T) n :
   l !!! n = nth n l inhabitant.
 Proof.
   rewrite nth_lookup. apply list_lookup_total_alt.
 Qed.
 
-Theorem skipn_nth {T} (d : T) l n : n < length l ->
-  skipn n l = nth n l d :: skipn (S n) l.
+Theorem drop_lookup {T} `{Inhabited T} (l : list T) n :
+  n < length l -> drop n l = l !!! n :: drop (S n) l.
 Proof.
   generalize dependent n.
   induction l as [ | h t IH]; try (simpl; lia).
-  intros n Hn. destruct n; try reflexivity.
+  intros n Hn. destruct n; [reflexivity|].
   rewrite skipn_cons.
-  simpl in Hn. rewrite IH; try lia.
-  rewrite skipn_cons. reflexivity.
+  simpl in Hn. rewrite IH; [|lia].
+  now rewrite skipn_cons.
 Qed.
 
-Theorem firstn_S {T} d (l : list T) n : n < length l ->
-  firstn (S n) l = firstn n l ++ [nth n l d].
+Theorem take_S {T} `{Inhabited T} (l : list T) n : n < length l ->
+  firstn (S n) l = firstn n l ++ [l !!! n].
 Proof.
-  intros. rewrite <- (rev_involutive l) at 1.
-  rewrite firstn_rev. rewrite length_rev.
-  rewrite (skipn_nth d); try (rewrite length_rev; lia).
-  replace (S (length l - S n)) with (length l - n);
-    try lia.
-  simpl. rewrite rev_nth; try lia. f_equal.
-  - rewrite skipn_rev. rewrite rev_involutive. f_equal.
-    lia.
-  - repeat f_equal. lia.
+  intros L.
+  apply take_S_r. now apply list_lookup_lookup_total_lt.
 Qed.
 
-Theorem Forall_repeat {T} (P : T -> Prop) x n : P x ->
-  Forall P (repeat x n).
+Theorem Forall_repeat {T} (P : T -> Prop) x n :
+  P x -> Forall P (repeat x n).
 Proof. intros. induction n; constructor; assumption. Qed.
 
 
@@ -85,25 +78,24 @@ Proof.
   apply E. now inversion Hd.
 Qed.
 
-Theorem StronglySorted_nth {T} d P (l : list T) :
+Theorem StronglySorted_lookup {T} `{Inhabited T} P (l : list T) :
   StronglySorted P l ->
   forall n m, n < length l -> m < length l ->
-  n < m -> P (nth n l d) (nth m l d).
+  n < m -> P (l !!! n) (l !!! m).
 Proof.
-  induction l; intros SR n m Ln Lm L;
-    try (simpl in Ln; lia).
+  induction l; intros SR n m Ln Lm L; [simpl in Ln; lia|].
   inversion SR. subst. destruct m, n; simpl; try lia.
-  - apply Forall_nth; try assumption.
+  - apply Forall_lookup_total; [assumption|].
     simpl in Lm. lia.
   - simpl in Ln, Lm. apply IHl; try assumption; lia.
 Qed.
 
-Theorem StronglySorted_nth_c {T} d P (l : list T) :
+Theorem StronglySorted_lookup_2 {T} `{Inhabited T} P (l : list T) :
   StronglySorted P l ->
   forall n m, n < length l -> m < length l ->
-  ~ P (nth n l d) (nth m l d) -> m <= n.
+  ~ P (l !!! n) (l !!! m) -> m <= n.
 Proof.
   intros SR n m Ln Lm C.
   destruct (Nat.le_gt_cases m n); try assumption.
-  exfalso. apply C. apply StronglySorted_nth; assumption.
+  exfalso. apply C. now apply StronglySorted_lookup.
 Qed.

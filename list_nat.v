@@ -112,9 +112,9 @@ Proof.
 Qed.
 
 
-(**********************************)
-(** ** Inverse function for [nth] *)
-(**********************************)
+(*************************************)
+(** ** Inverse function for [lookup] *)
+(*************************************)
 
 Definition list_find_total {T} `{Inhabited T} (P : T -> Prop) `{forall x, Decision (P x)} l :=
   default inhabitant (list_find P l).
@@ -160,7 +160,7 @@ Qed.
 
 
 (********************)
-(** ** List minimum *)
+(** * List minimum *)
 (********************)
 
 Fixpoint list_min l :=
@@ -214,7 +214,7 @@ Qed.
 
 
 (***************************)
-(** ** Removing duplicates *)
+(** * Removing duplicates *)
 (***************************)
 
 Fixpoint sorted_nodup l :=
@@ -290,35 +290,6 @@ Proof.
 Qed.
 
 
-(*********************)
-(** ** List equality *)
-(*********************)
-
-Fixpoint list_eq l m :=
-  match l, m with
-  | [], [] => true
-  | hl :: tl, hm :: tm => if hl =? hm then list_eq tl tm else false
-  | _, _ => false
-  end.
-
-Theorem list_eq_spec l m :
-  Bool.reflect (l = m) (list_eq l m).
-Proof.
-  remember (list_eq l m) as b. destruct b; constructor.
-  - generalize dependent m.
-    induction l; simpl; intros; destruct m;
-      try reflexivity; try discriminate.
-      destruct (eqb_spec a n); try discriminate.
-      subst. f_equal. apply IHl. assumption.
-  - generalize dependent m.
-    induction l; simpl; intros; destruct m;
-      try discriminate.
-    destruct (eqb_spec a n).
-    + intros C. eapply IHl; try eassumption.
-      injection C. auto.
-    + intros C. injection C as N. contradiction.
-Qed.
-
 (***********************)
 (** ** Find a sequence *)
 (***********************)
@@ -326,7 +297,7 @@ Qed.
 Fixpoint find_seq_aux p l n :=
   match l with
   | [] => p
-  | h :: t => if list_eq (firstn n l) (seq h n) then p
+  | h :: t => if decide (take n l = seq h n) then p
       else find_seq_aux (S p) t n
   end.
 
@@ -335,52 +306,51 @@ Theorem find_seq_aux_S p l n :
 Proof.
   generalize dependent p.
   induction l; intros; simpl; try reflexivity.
-  destruct (list_eq_spec (firstn n (a :: l)) (seq a n));
+  destruct (decide (take n (a :: l) = seq a n));
     try reflexivity.
   apply IHl.
 Qed.
 
 Definition find_seq := find_seq_aux 0.
 
-Theorem find_seq_seq d l n : find_seq l n < length l ->
-  firstn n (skipn (find_seq l n) l) =
-    seq (nth (find_seq l n) l d) n.
+Theorem find_seq_seq l n : find_seq l n < length l ->
+  take n (drop (find_seq l n) l) =
+    seq (l !!! find_seq l n) n.
 Proof.
-  intros L. induction l; try (simpl in *; lia).
+  intros L. induction l; [simpl in *; lia|].
   unfold find_seq in *. simpl in *.
-  destruct (list_eq_spec (firstn n (a :: l)) (seq a n)).
+  destruct (decide (firstn n (a :: l) = seq a n)).
   - rewrite skipn_O. assumption.
   - rewrite find_seq_aux_S in *. apply IHl. lia.
 Qed.
 
 Theorem find_seq_neq a l n h :
   find_seq (h ++ a :: l) n > length h ->
-  firstn n (a :: l) <> seq a n.
+  take n (a :: l) <> seq a n.
 Proof.
-  induction h as [ | x h IH];
-    unfold find_seq; simpl; intros.
-  - destruct (list_eq_spec (firstn n (a :: l)) (seq a n));
+  induction h as [|x h IH]; unfold find_seq; simpl; intros.
+  - destruct (decide (firstn n (a :: l) = seq a n));
       [lia | assumption].
-  - destruct (list_eq_spec (firstn n (x :: h ++ a :: l)) (seq x n));
-      try lia.
+  - destruct (decide (firstn n (x :: h ++ a :: l) = seq x n));
+      [lia|].
     apply IH. rewrite find_seq_aux_S in H.
     fold find_seq in H. lia.
 Qed.
 
-Theorem find_seq_first d l n m : find_seq l n < length l ->
-  find_seq l n = S m -> S (nth m l d) <> nth (S m) l d.
+Theorem find_seq_first l n m : find_seq l n < length l ->
+  find_seq l n = S m -> S (l !!! m) <> l !!! S m.
 Proof.
   intros L E C.
-  apply (find_seq_seq d) in L as F. rewrite E in *.
-  assert (G : find_seq l n > length (firstn m l)). {
+  apply find_seq_seq in L as F. rewrite E in *.
+  assert (G : find_seq l n > length (take m l)). {
     rewrite firstn_length_le; lia.
   }
   rewrite <- (firstn_skipn m l) in G at 1.
-  rewrite (skipn_nth d) in G; try lia.
+  rewrite drop_lookup in G; [|lia].
   apply find_seq_neq in G. apply G. clear G.
-  replace (nth m l d :: skipn (S m) l) with ([nth m l d] ++ skipn (S m) l); try reflexivity.
+  replace (l !!! m :: drop (S m) l) with ([l !!! m] ++ drop (S m) l); try reflexivity.
   rewrite firstn_app. destruct n; try reflexivity.
-  remember (skipn (S m) l) as s.
+  remember (drop (S m) l) as s.
   simpl. f_equal. rewrite firstn_nil, sub_0_r. simpl.
   generalize F. intros G.
   rewrite seq_S in G. rewrite C.
@@ -391,13 +361,12 @@ Proof.
     rewrite length_firstn in F.
     unfold "<". rewrite <- F. apply le_min_r.
   }
-  rewrite (firstn_S d); try assumption.
+  rewrite take_S; try assumption.
   repeat f_equal.
-  rewrite <- E in L. apply (find_seq_seq d) in L as F1.
-  replace (nth n s d) with (nth n (seq (nth (S m) l d) (S n)) d).
-  - symmetry. apply seq_nth. lia.
-  - rewrite E in F1. rewrite <- F1. rewrite nth_firstn.
-    destruct (ltb_spec n (S n)); try lia.
+  rewrite <- E in L. apply find_seq_seq in L as F1.
+  replace (s !!! n) with ((seq (l !!! S m) (S n)) !!! n).
+  - symmetry. apply lookup_total_seq_lt. lia.
+  - rewrite E in F1. rewrite <- F1.
+    rewrite lookup_total_take; [|lia].
     subst s. reflexivity.
 Qed.
-
