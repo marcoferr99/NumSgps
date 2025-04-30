@@ -3,10 +3,6 @@ Require Export list.
 Export Nat.
 
 
-(*******************************)
-(** * Lists of natural numbers *)
-(*******************************)
-
 Theorem list_max_notin l x : x > list_max l -> x ∉ l.
 Proof.
   intros Hx. destruct l eqn : E; [easy|].
@@ -15,6 +11,73 @@ Proof.
   intros N. eapply Forall_forall in Hx; try eassumption.
   lia.
 Qed.
+
+(** Let [n] be the minimum natural number such that the list [l] begins with
+    [[x, x+1, ..., x+(n-1), y]] and [y <> x+n].  Than the function [find_gap]
+    returns [x+n]. *)
+
+Fixpoint find_gap x l :=
+  match l with
+  | [] => x
+  | h :: t =>
+      if h =? x then find_gap (S x) t else x
+  end.
+
+Theorem find_gap_le x l : x <= find_gap x l.
+Proof.
+  generalize dependent x. induction l; simpl; [lia|].
+  intros x. destruct (eqb_spec a x); [|lia].
+  subst. eapply le_trans; [|apply IHl]. lia.
+Qed.
+
+Theorem find_gap_le_lt_in x l : Sorted lt l ->
+  forall n, x <= n < find_gap x l -> n ∈ l.
+Proof.
+  intros L n [Le Lt]. generalize dependent x.
+  induction l; simpl in *; [lia|].
+  intros x Le Lt.
+  destruct (eq_dec n a); subst; [constructor|]. right.
+  assert (LS : Sorted lt l); [inversion L; assumption|].
+  destruct (eqb_spec a x); [|lia].
+  eapply IHl; [assumption| |eassumption]. lia.
+Qed.
+
+Theorem find_gap_notin x l : Sorted lt l ->
+  Forall (le x) l -> find_gap x l ∉ l.
+Proof.
+  intros L. generalize dependent x. induction l; [easy|].
+  simpl. intros x F.
+  assert (Sorted lt l); [inversion L; assumption|].
+  apply Sorted_StronglySorted in L; [|intros ?; lia].
+  destruct (eqb_spec a x); intros C; inversion C; subst.
+  - generalize (find_gap_le (S x) l). lia.
+  - specialize IHl with (S x). apply IHl; try assumption.
+    apply Forall_forall. intros a Ha.
+    assert (x < a); [|lia].
+    inversion L. eapply Forall_forall; eassumption.
+  - contradiction.
+  - assert (x <= a). {
+      eapply Forall_forall; [eassumption|constructor].
+    }
+    assert (a < x); [|lia].
+    inversion L. subst. eapply Forall_forall; eassumption.
+Qed.
+
+Theorem find_gap_notin_le x l n : Sorted lt l ->
+  n ∉ l -> n >= x -> find_gap x l <= n.
+Proof.
+  intros L N G.
+  destruct (le_gt_cases (find_gap x l) n);
+    [assumption|].
+  exfalso. apply N.
+  eapply find_gap_le_lt_in; [assumption|].
+  split; eassumption.
+Qed.
+
+
+(**************)
+(** * Sorting *)
+(**************)
 
 Theorem Sorted_le_lt l :
   Sorted lt l <-> Sorted le l /\ NoDup l.

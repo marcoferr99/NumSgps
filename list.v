@@ -5,6 +5,12 @@ From stdpp Require Export list sorting.
 (** * Generic list facts *)
 (*************************)
 
+Theorem lookup_total_nth {T} `{!Inhabited T} (l : list T) n :
+  l !!! n = nth n l inhabitant.
+Proof.
+  rewrite nth_lookup. apply list_lookup_total_alt.
+Qed.
+
 Theorem skipn_nth {T} (d : T) l n : n < length l ->
   skipn n l = nth n l d :: skipn (S n) l.
 Proof.
@@ -77,4 +83,27 @@ Proof.
   inversion S as [|? ? ? Hd]. constructor; [auto|].
   destruct l; constructor.
   apply E. now inversion Hd.
+Qed.
+
+Theorem StronglySorted_nth {T} d P (l : list T) :
+  StronglySorted P l ->
+  forall n m, n < length l -> m < length l ->
+  n < m -> P (nth n l d) (nth m l d).
+Proof.
+  induction l; intros SR n m Ln Lm L;
+    try (simpl in Ln; lia).
+  inversion SR. subst. destruct m, n; simpl; try lia.
+  - apply Forall_nth; try assumption.
+    simpl in Lm. lia.
+  - simpl in Ln, Lm. apply IHl; try assumption; lia.
+Qed.
+
+Theorem StronglySorted_nth_c {T} d P (l : list T) :
+  StronglySorted P l ->
+  forall n m, n < length l -> m < length l ->
+  ~ P (nth n l d) (nth m l d) -> m <= n.
+Proof.
+  intros SR n m Ln Lm C.
+  destruct (Nat.le_gt_cases m n); try assumption.
+  exfalso. apply C. apply StronglySorted_nth; assumption.
 Qed.

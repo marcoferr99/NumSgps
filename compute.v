@@ -168,226 +168,237 @@ Section generators.
     last_element_pos i < length (small_list_limit i).
 
   Definition last_element i :=
-    nth (last_element_pos i) (small_list_limit i).
+    small_list_limit i !!! last_element_pos i.
 
   Definition small_elements i :=
     firstn (S (last_element_pos i)) (small_list_limit i).
 
-  Section numerical_semigroup.
-    Context A `{NS : numerical_semigroup A}
-      (G : generator A (Inl gen)).
 
-    Theorem small_list_all n a : A a -> a < nth_limit n ->
-      In a (small_list n).
-    Proof.
-      intros Aa L.
-      destruct (nhsum_all_limit _ G n a) as [m Hm];
-	try assumption.
-      destruct Hm as [Hm E]. subst.
-      generalize Hm. clear. intros.
-      unfold small_list. apply -> sorted_nodup_In.
-      eapply Permutation_in; try apply Permuted_sort.
-      generalize dependent m. intros.
-      induction n; simpl; try lia.
-      destruct (eq_dec m n).
-      - subst. left. reflexivity.
-      - right. apply IHn; lia.
-    Qed.
+  Theorem small_list_all n a : a ∈ M -> a < nth_limit n ->
+    a ∈ small_list n.
+  Proof.
+    intros Aa L.
+    destruct (nhsum_all_limit n a) as [m Hm];
+      try assumption.
+    destruct Hm as [Hm E]. subst.
+    generalize Hm. clear. intros.
+    unfold small_list. rewrite <- sorted_nodup_in.
+    rewrite merge_sort_Permutation.
+    generalize dependent m. intros.
+    induction n; simpl; try lia.
+    destruct (eq_dec m n); subst; [left|right].
+    apply IHn; lia.
+  Qed.
 
-    Theorem small_list_limit_all n a :
-      A a -> Exists (le a) (small_list_limit n) ->
-      In a (small_list_limit n).
-    Proof.
-      intros Aa E. unfold small_list_limit in *.
-      apply filter_In. apply Exists_exists in E.
-      destruct E as [x Hx]. destruct Hx as [I L].
-      apply filter_In in I. destruct I.
-      destruct (ltb_spec x (nth_limit n)); try discriminate.
-      unfold le in L. split.
-      - eapply small_list_all; try eassumption. lia.
-      - destruct (ltb_spec a (nth_limit n)); try reflexivity.
-	lia.
-    Qed.
+  Theorem small_list_limit_all n a :
+    a ∈ M -> Exists (le a) (small_list_limit n) ->
+    a ∈ small_list_limit n.
+  Proof.
+    intros Aa E. unfold small_list_limit in *.
+    apply elem_of_list_filter. apply Exists_exists in E.
+    destruct E as [x Hx]. destruct Hx as [I L].
+    apply elem_of_list_filter in I. destruct I.
+    split; [lia|].
+    destruct (eq_dec x a); subst; [assumption|].
+    apply small_list_all; [assumption|lia].
+  Qed.
 
-    Theorem small_list_limit_In n a :
-      In a (small_list_limit n) -> A a.
-    Proof.
-      intros I.
-      unfold small_list_limit in I. apply filter_In in I.
-      destruct I as [I _]. unfold small_list in I.
-      apply sorted_nodup_In in I.
-      eapply Permutation_in in I;
-	try (symmetry; apply Permuted_sort).
-      induction n.
-      - simpl in I. contradiction.
-      - simpl in I. destruct I; auto.
-	rewrite <- H. eapply nhsum_in; assumption.
-    Qed.
+  Theorem small_list_limit_In n a :
+    a ∈ small_list_limit n -> a ∈ M.
+  Proof.
+    intros I.
+    unfold small_list_limit in I.
+    apply elem_of_list_filter in I.
+    destruct I as [_ I]. unfold small_list in I.
+    apply sorted_nodup_in in I.
+    rewrite merge_sort_Permutation in I.
+    induction n; simpl in I; [easy|].
+    set_unfold. destruct I; auto.
+    subst. eapply nhsum_in; assumption.
+  Qed.
 
-    Theorem small_list_limit_small_elements i :
-      small_list_limit i = small_elements i ++ skipn (S (last_element_pos i)) (small_list_limit i).
-    Proof. symmetry. apply firstn_skipn. Qed.
+  Theorem small_list_limit_small_elements i :
+    small_list_limit i = small_elements i ++ skipn (S (last_element_pos i)) (small_list_limit i).
+  Proof. symmetry. apply firstn_skipn. Qed.
 
-    Theorem small_elements_In i a :
-      In a (small_elements i) -> A a.
-    Proof.
-      intros I. apply (small_list_limit_In i).
-      rewrite small_list_limit_small_elements.
-      apply in_or_app. left. assumption.
-    Qed.
+  Theorem small_elements_In i a :
+    a ∈ small_elements i -> a ∈ M.
+  Proof.
+    intros I. apply (small_list_limit_In i).
+    rewrite small_list_limit_small_elements.
+    apply elem_of_app. left. assumption.
+  Qed.
 
 (** [small_elements] contains all the elements of [A] that are less then or
     equal to [last_element]. *)
 
-    Theorem small_elements_le_all i : term i ->
-      forall a, A a -> a <= last_element i ->
-      In a (small_elements i).
-    Proof.
-      intros T a Aa L.
-      assert (Is : In a (small_list_limit i)). {
-	eapply small_list_limit_all; try eassumption.
-	apply Exists_exists. exists (last_element i).
-	split; try assumption. apply nth_In. assumption.
-      }
-      apply In_nth with (d := 0) in Is.
-      destruct Is as [n [Hn1 Hn2]]. subst a.
-      unfold last_element in L.
-      assert (n <= last_element_pos i). {
-	apply nlt_ge. intros C.
-	apply nlt_ge in L. apply L. clear L.
-	apply StronglySorted_nth; try assumption.
-	apply small_list_limit_sorted_lt.
-      }
-      unfold term in T.
-      rewrite <- (firstn_skipn (S (last_element_pos i)) (small_list_limit i)).
-      rewrite app_nth1.
-      - apply nth_In. unfold small_elements.
-	rewrite firstn_length_le; lia.
-      - rewrite firstn_length_le; lia.
-    Qed.
+  Theorem small_elements_le_all i : term i ->
+    forall a, a ∈ M -> a <= last_element i ->
+    a ∈ small_elements i.
+  Proof.
+    intros T a Aa L.
+    assert (Is : a ∈ small_list_limit i). {
+      eapply small_list_limit_all; try eassumption.
+      apply Exists_exists. exists (last_element i).
+      split; try assumption. 
+      apply elem_of_list_lookup_total_2. assumption.
+    }
+    apply elem_of_list_lookup_total_1 in Is.
+    destruct Is as [n [Hn1 Hn2]]. subst a.
+    unfold last_element in L.
+    assert (n <= last_element_pos i). {
+      apply nlt_ge. intros C.
+      apply nlt_ge in L. apply L. clear L.
+      repeat rewrite lookup_total_nth.
+      apply StronglySorted_nth; try assumption.
+      apply small_list_limit_sorted_lt.
+    }
+    unfold term in T.
+    rewrite <- (firstn_skipn (S (last_element_pos i)) (small_list_limit i)).
+    rewrite lookup_total_nth. rewrite app_nth1.
+    - apply nth_elem_of. unfold small_elements.
+      rewrite firstn_length_le; lia.
+    - rewrite firstn_length_le; lia.
+  Qed.
 
 (** All the elements greater than or equal to last_element are in A. *)
 
-    Theorem small_elements_ge_all i : term i ->
-      forall a, a >= last_element i -> A a.
-    Proof.
-      intros T a L.
-      replace a with (a - last_element i + last_element i);
-	try lia.
-      erewrite (Div0.div_mod (a - last_element i) (list_min gen)); try lia.
-      rewrite <- add_assoc. apply ns_closed.
-      + rewrite mul_comm.
-	apply sub_mul_closed; try apply _.
-	destruct G as [G1 _]. unfold Included in *.
-	apply G1. simpl.
-	apply list_min_In. apply gen_neq.
-      + apply (find_seq_seq 0 (small_list_limit i) (list_min gen)) in T.
-	eapply small_list_limit_In with (n := i);
-	  try assumption.
-	rewrite <- (firstn_skipn (last_element_pos i) (small_list_limit i)).
-	apply in_or_app. right.
-	rewrite <- (firstn_skipn (list_min gen)).
-	apply in_or_app. left.
-	fold (last_element_pos i) in T. rewrite T.
-	apply in_seq. fold (last_element i).
-	split; try lia.
-	apply (mod_upper_bound (a - last_element i) (list_min gen)) in M.
-	lia.
-    Qed.
+  Theorem small_elements_ge_all i : term i ->
+    forall a, a >= last_element i -> a ∈ M.
+  Proof.
+    intros T a L.
+    replace a with (a - last_element i + last_element i);
+      try lia.
+    erewrite (Div0.div_mod (a - last_element i) (list_min gen)); try lia.
+    rewrite <- add_assoc. apply ns_closed.
+    + rewrite mul_comm.
+      apply ns_mul_closed.
+      destruct G as [G1 _].
+      apply G1. simpl.
+      apply list_min_in. apply gen_neq.
+    + apply (find_seq_seq 0 (small_list_limit i) (list_min gen)) in T.
+      eapply small_list_limit_In with (n := i);
+	try assumption.
+      rewrite <- (firstn_skipn (last_element_pos i) (small_list_limit i)).
+      apply elem_of_app. right.
+      rewrite <- (firstn_skipn (list_min gen)).
+      apply elem_of_app. left.
+      fold (last_element_pos i) in T. rewrite T.
+      apply elem_of_seq.
+      unfold last_element in *.
+      rewrite lookup_total_nth in *.
+      replace inhabitant with 0; [|reflexivity].
+      split; try lia.
+      apply (mod_upper_bound (a - last_element i) (list_min gen)) in m0.
+      unfold last_element in *.
+      rewrite lookup_total_nth in *.
+      replace inhabitant with 0 in *; [|reflexivity].
+      lia.
+  Qed.
 
 (** [last_element] is [0] or its predecessor is not in [A]. *)
 
-    Theorem last_element_pred_not_in i : term i ->
-      last_element i <> 0 -> ~ A (last_element i - 1).
-    Proof.
-      intros T N C.
-      apply (small_elements_le_all i) in C;
-	try assumption; try lia.
-      assert (SS := small_list_limit_sorted_lt i).
-      assert (last_element_pos i <> 0). {
-	intros D. unfold last_element in *.
-	rewrite D in *. clear D. apply N.
-	inversion SS; try reflexivity. simpl.
-	assert (I : In 0 (small_list_limit i)). {
-	  eapply small_list_limit_all; try eassumption.
-	  - apply ns_zero.
-	  - rewrite <- H. constructor. lia.
-	}
-	apply In_nth with (d := 0) in I.
-	destruct I as [n [Ln Hn]].
-	rewrite <- H in *. destruct n; try assumption.
-	simpl in *.
-	apply Forall_nth with (d := 0) (i := n) in H1; lia.
+  Theorem last_element_pred_not_in i : term i ->
+    last_element i <> 0 -> (last_element i - 1) ∉ M.
+  Proof.
+    intros T N C.
+    apply (small_elements_le_all i) in C;
+      try assumption; try lia.
+    assert (SS := small_list_limit_sorted_lt i).
+    assert (last_element_pos i <> 0). {
+      intros D. unfold last_element in *.
+      rewrite D in *. clear D. apply N.
+      inversion SS; try reflexivity. simpl.
+      assert (I : 0 ∈ small_list_limit i). {
+	eapply small_list_limit_all; try eassumption.
+	- apply ns_zero.
+	- rewrite <- H0. constructor. lia.
       }
-      eapply (find_seq_first 0 (small_list_limit i) _ (last_element_pos i - 1)).
-      - apply T.
-      - fold (last_element_pos i). lia.
-      - replace (S (last_element_pos i - 1)) with (last_element_pos i); try lia.
-	assert (I : In (last_element i - 1) (small_list_limit i)). {
-	  unfold small_elements in C.
-	  rewrite <- (firstn_skipn (S (last_element_pos i))).
-	  apply in_or_app. intuition.
+      apply elem_of_list_lookup_total_1 in I.
+      destruct I as [n [Ln Hn]].
+      rewrite <- H0 in *. destruct n; try assumption.
+      simpl in *.
+      assert (a < 0); [|lia].
+      eapply Forall_forall; try eassumption.
+      rewrite <- Hn.
+      apply elem_of_list_lookup_total_2.
+      lia.
+    }
+    eapply (find_seq_first 0 (small_list_limit i) _ (last_element_pos i - 1)).
+    - apply T.
+    - fold (last_element_pos i). lia.
+    - replace (S (last_element_pos i - 1)) with (last_element_pos i); try lia.
+      assert (I : (last_element i - 1) ∈ (small_list_limit i)). {
+	unfold small_elements in C.
+	rewrite <- (firstn_skipn (S (last_element_pos i))).
+	apply elem_of_app. intuition.
+      }
+      apply elem_of_list_lookup_total_1 in I.
+      destruct I as [n [Hn1 Hn2]].
+      assert (E : 0 = inhabitant); [reflexivity|].
+      rewrite E at 2 3.
+      repeat rewrite <- lookup_total_nth in *.
+      fold (last_element i).
+      replace (last_element_pos i - 1) with n; try lia.
+      unfold last_element in Hn2. unfold term in T.
+      assert (Ln : n < last_element_pos i). {
+	assert (Ln : n <= last_element_pos i). {
+	  eapply (StronglySorted_nth_c 0);
+	    try eassumption.
+	    repeat rewrite lookup_total_nth in *.
+	    replace inhabitant with 0 in *; try reflexivity.
+	    lia.
 	}
-	apply In_nth with (d := 0) in I.
-	destruct I as [n [Hn1 Hn2]].
-	fold (last_element i).
-	replace (last_element_pos i - 1) with n; try lia.
-	unfold last_element in Hn2. unfold term in T.
-	assert (Ln : n < last_element_pos i). {
-	  assert (Ln : n <= last_element_pos i). {
-	    eapply (StronglySorted_nth_c 0);
-	      try eassumption.
-	      lia.
-	  }
-	  assert (n <> last_element_pos i); try lia.
-	  intros D. subst. fold (last_element i) in *. lia.
-	}
-	assert (S n = last_element_pos i); try lia.
-	assert (LSn : S n < length (small_list_limit i));
-	  try lia.
-	apply le_antisymm; try lia.
-	eapply (StronglySorted_nth_c 0); try eassumption.
-	unfold lt. intros D.
-	fold (last_element i) in *.
-	assert (nSn : n < S n); try lia.
-	eapply (StronglySorted_nth 0) in nSn;
-	  try eassumption.
-	lia.
-    Qed.
+	assert (n <> last_element_pos i); try lia.
+	intros D. subst. fold (last_element i) in *. lia.
+      }
+      assert (S n = last_element_pos i); try lia.
+      assert (LSn : S n < length (small_list_limit i));
+	try lia.
+      apply le_antisymm; try lia.
+      eapply (StronglySorted_nth_c 0); try eassumption.
+      unfold lt. intros D.
+      rewrite E in D.
+      repeat rewrite <- lookup_total_nth in D.
+      fold (last_element i) in *.
+      assert (nSn : n < S n); try lia.
+      eapply (StronglySorted_nth 0) in nSn;
+	try eassumption.
+      rewrite E in *.
+      repeat rewrite <- lookup_total_nth in *.
+      lia.
+  Qed.
 
-    Theorem i_not_zero i : term i -> i <> 0.
-    Proof.
-      unfold term. intros T C. subst.
-      simpl in T. lia.
-    Qed.
+  Theorem i_not_zero i : term i -> i <> 0.
+  Proof.
+    unfold term. intros T C. subst.
+    simpl in T. lia.
+  Qed.
 
-    Theorem nth_limit_not_zero i : term i ->
-      nth_limit i <> 0.
-    Proof.
-      unfold nth_limit. intros T C.
-      apply eq_mul_0_r in C; try contradiction.
-      destruct i.
-      - apply i_not_zero in T. contradiction.
-      - intros D. apply length_zero_iff_nil in D.
-	simpl in D. eapply next_not_nil. eassumption.
-    Qed.
+  Theorem nth_limit_not_zero i : term i ->
+    nth_limit i <> 0.
+  Proof.
+    unfold nth_limit. intros T C.
+    apply eq_mul_0_r in C; try contradiction.
+    destruct i.
+    - apply i_not_zero in T. contradiction.
+    - intros D. apply length_zero_iff_nil in D.
+      simpl in D. eapply next_not_nil. eassumption.
+  Qed.
 
-    Theorem small_list_limit_not_nil i : term i ->
-      small_list_limit i <> [].
-    Proof.
-      intros T C.
-      generalize (small_list_all i 0). intros I.
-      unfold small_list_limit in *.
-      assert (N : In 0 []); try inversion N.
-      rewrite <- C. apply filter_In.
-      apply nth_limit_not_zero in T. split.
-      - apply I; try apply ns_zero. lia.
-      - destruct (ltb_spec 0 (nth_limit i));
-	  try reflexivity.
-	lia.
-    Qed.
+  Theorem small_list_limit_not_nil i : term i ->
+    small_list_limit i <> [].
+  Proof.
+    intros T C.
+    generalize (small_list_all i 0). intros I.
+    unfold small_list_limit in *.
+    assert (N : 0 ∈ []); try inversion N.
+    rewrite <- C. apply elem_of_list_filter.
+    apply nth_limit_not_zero in T. split.
+    - lia.
+    - apply I; try apply ns_zero. lia.
+  Qed.
 
-  End numerical_semigroup.
 End generators.
 
 Compute small_elements [4;7;10] 100.
@@ -463,8 +474,9 @@ Proof.
 Qed.
 
 
-Compute small_elements [4;7;10] 100.
-Compute find_congr 4 3 (small_elements [4;7;10] 100).
+Compute term [5;9;21] 60.
+Compute small_elements [5;9;21] 60.
+Compute find_congr 5 4 (small_elements [5;9;21] 100).
 
 Theorem find_congr_apery_w A `{numerical_semigroup A}
   gen i n (n0 : n <> 0) :

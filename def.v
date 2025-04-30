@@ -2,19 +2,19 @@ Require Export list_nat nat.
 From Coq Require Import Euclid.
 
 Generalizable No Variables.
-Generalizable Variable C M.
+Generalizable Variables C M.
 
 
 (*************************************)
 (** * Numerical semigroup definition *)
 (*************************************)
 
-Class submonoid (M : propset nat) : Prop := {
+Class submonoid `{Set_ nat C} (M : C) : Prop := {
   ns_zero : 0 ∈ M;
   ns_closed : forall a b, a ∈ M -> b ∈ M -> a + b ∈ M
 }.
 
-Theorem ns_mul_closed `{submonoid M} :
+Theorem ns_mul_closed `{submonoid C M} :
   forall n m, m ∈ M -> n * m ∈ M.
 Proof.
   intros. induction n.
@@ -22,14 +22,14 @@ Proof.
   - now apply ns_closed.
 Qed.
 
-Class numerical_semigroup M : Set := {
+Class numerical_semigroup `{Set_ nat C} (M : C) : Set := {
   ns_submonoid :: submonoid M;
   gaps : list nat;
   sorted_gaps : Sorted lt gaps;
   elem_of_gaps x : x ∈ M <-> x ∉ gaps
 }.
 
-Instance ns_Decision `{numerical_semigroup M} x :
+Instance ns_Decision `{numerical_semigroup C M} x :
   Decision (x ∈ M).
 Proof.
   destruct (elem_of_list_dec x gaps).
@@ -37,7 +37,7 @@ Proof.
   - left. apply elem_of_gaps. assumption.
 Qed.
 
-Theorem elem_of_gaps' `{numerical_semigroup M} x :
+Theorem elem_of_gaps' `{numerical_semigroup C M} x :
   x ∈ gaps <-> x ∉ M.
 Proof.
   split; intros Ha.
@@ -48,72 +48,12 @@ Qed.
 
 (** Some definitions over numerical semigroups *)
 
-Fixpoint multiplicity_aux x l :=
-  match l with
-  | [] => x
-  | h :: t =>
-      if h =? x then multiplicity_aux (S x) t else x
-  end.
-
-Theorem multiplicity_aux_le x l :
-  x <= multiplicity_aux x l.
-Proof.
-  generalize dependent x. induction l; simpl; [lia|].
-  intros x. destruct (eqb_spec a x); [|lia].
-  subst. eapply le_trans; [|apply IHl]. lia.
-Qed.
-
-Theorem multiplicity_aux_le_lt_in x l : Sorted lt l ->
-  forall n, x <= n < multiplicity_aux x l -> n ∈ l.
-Proof.
-  intros L n [Le Lt]. generalize dependent x.
-  induction l; simpl in *; [lia|].
-  intros x Le Lt.
-  destruct (eq_dec n a); subst; [constructor|]. right.
-  assert (LS : Sorted lt l); [inversion L; assumption|].
-  destruct (eqb_spec a x).
-  - eapply IHl; [assumption| |eassumption]. lia.
-  - eapply IHl; [assumption|eassumption|]. lia.
-Qed.
-
-Theorem multiplicity_aux_notin x l : Sorted lt l ->
-  Forall (le x) l -> multiplicity_aux x l ∉ l.
-Proof.
-  intros L. generalize dependent x. induction l; [easy|].
-  simpl. intros x F.
-  assert (Sorted lt l); [inversion L; assumption|].
-  apply Sorted_StronglySorted in L; [|intros ?; lia].
-  destruct (eqb_spec a x); intros C; inversion C; subst.
-  - generalize (multiplicity_aux_le (S x) l). lia.
-  - specialize IHl with (S x). apply IHl; try assumption.
-    apply Forall_forall. intros a Ha.
-    assert (x < a); [|lia].
-    inversion L. eapply Forall_forall; eassumption.
-  - contradiction.
-  - assert (x <= a). {
-      eapply Forall_forall; [eassumption|constructor].
-    }
-    assert (a < x); [|lia].
-    inversion L. subst. eapply Forall_forall; eassumption.
-Qed.
-
-Theorem multiplicity_aux_notin_le x l n : Sorted lt l ->
-  n ∉ l -> n >= x -> multiplicity_aux x l <= n.
-Proof.
-  intros L N G.
-  destruct (le_gt_cases (multiplicity_aux x l) n);
-    [assumption|].
-  exfalso. apply N.
-  eapply multiplicity_aux_le_lt_in; [assumption|].
-  split; eassumption.
-Qed.
-
 Section numerical_semigroup.
-  Context `{numerical_semigroup M}.
+  Context `{numerical_semigroup C M}.
 
   Definition genus := length gaps.
 
-  Definition multiplicity := multiplicity_aux 1 gaps.
+  Definition multiplicity := find_gap 1 gaps.
 
   Theorem multiplicity_min :
     set_min (M ∖ {[0]}) multiplicity.
@@ -121,17 +61,16 @@ Section numerical_semigroup.
     split.
     - apply elem_of_difference. split.
       + apply elem_of_gaps.
-	apply (multiplicity_aux_notin 1);
-	  [apply sorted_gaps|].
+	apply (find_gap_notin 1); [apply sorted_gaps|].
 	apply Forall_forall. intros x Hx.
 	assert (x <> 0); [|lia].
 	intros X. subst.
 	apply elem_of_gaps' in Hx. apply Hx. apply ns_zero.
-      + intros N. apply elem_of_singleton in N.
-	generalize (multiplicity_aux_le 1 gaps).
+      + intros N. set_unfold.
+	generalize (find_gap_le 1 gaps).
 	unfold multiplicity in N. lia.
-    - intros n Hn. set_unfold in Hn.
-      apply multiplicity_aux_notin_le.
+    - intros n Hn. set_unfold.
+      apply find_gap_notin_le.
       + apply sorted_gaps.
       + now apply elem_of_gaps.
       + lia.
@@ -146,7 +85,7 @@ Section numerical_semigroup.
   Theorem conductor_le_in x : conductor <= x -> x ∈ M.
   Proof.
     unfold conductor. intros L.
-    apply elem_of_gaps. destruct gaps eqn : E; [easy|].
+    apply elem_of_gaps. destruct gaps eqn : ?; [easy|].
     apply list_max_notin. lia.
   Qed.
 
