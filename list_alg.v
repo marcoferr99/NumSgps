@@ -273,16 +273,16 @@ Section nh.
       assert (Lh : sorted h). {
 	subst h. destruct m; subst md.
 	- rewrite app_nil_l.
-	  remember (skipn (S (k 0)) l) as s eqn : E.
+	  remember (drop (S (k 0)) l) as s eqn : E.
 	  clear E. destruct s.
 	  + rewrite app_nil_r. apply repeat_sorted.
 	  + inversion FS. lia.
 	- apply Sorted_middle.
-	  + apply sorted_app_le with max; try lia.
+	  + apply sorted_app_le with max; [lia|].
 	    replace [max] with (repeat max 1);
 	      try reflexivity.
 	    rewrite <- repeat_app. apply repeat_sorted.
-	  + remember (skipn (S (k (S m))) l) as s eqn : E.
+	  + remember (drop (S (k (S m))) l) as s eqn : E.
 	    constructor.
 	    * rewrite E.
 	      rewrite <- (firstn_skipn (S (k (S m)))) in L.
@@ -290,57 +290,57 @@ Section nh.
 	    * inversion FS; constructor. lia.
       }
       apply H; try assumption.
-      - subst h. apply Forall_app. split.
-	+ clear. induction (k m); simpl; constructor;
-	    [lia | assumption].
-	+ apply Forall_app. split.
-	  * subst md.
-	    destruct m; constructor; [lia | constructor].
-	  * rewrite <- (firstn_skipn (S (k m))) in F.
-	    apply Forall_app in F. apply F.
+      - subst h. apply Forall_app.
+	split; [apply Forall_repeat; lia|].
+	apply Forall_app. split.
+	+ subst md.
+	  destruct m; constructor; [lia | constructor].
+	+ rewrite <- (firstn_skipn (S (k m))) in F.
+	  apply Forall_app in F. apply F.
       - intros i Hil. apply Hl in Hil as Hi.
 	destruct m.
-	+ subst md h. assert (i = 0); try lia. subst.
+	+ subst md h. assert (i = 0); [lia|]. subst.
 	  destruct (skipn (S (k 0))).
 	  * repeat rewrite app_nil_r in *.
 	    rewrite ml_0. apply repeat_length.
 	  * inversion FS. lia.
 	+ generalize (firstn_skipn (k (S m)) l).
-	  rewrite (skipn_nth 0); try assumption.
+	  rewrite drop_lookup; try assumption.
 	  intros El. symmetry in El.
 	  subst Sk. simpl in Hi, Hl.
 	  destruct (eqb_spec i (S m)).
 	  * subst. apply le_antisymm.
 	    -- destruct (le_gt_cases (ml (S m) h) (k (S m))) as [C | C]; try assumption.
-		apply ml_nth_ge in C; try assumption.
+		apply ml_lookup_ge in C; try assumption.
 		unfold h in C.
-		rewrite app_nth2 in C;
-		  rewrite repeat_length in *; try lia.
+		Search lookup_total app.
+		rewrite lookup_total_app_r in C;
+		  rewrite repeat_length in *; [|lia].
 		rewrite sub_diag in C.
 		subst md. simpl in C. lia.
 	    -- assert (length l = length h). {
 		 rewrite El. subst h.
 		 repeat rewrite length_app.
-		 remember (skipn (S (k (S m))) l) as s.
+		 remember (drop (S (k (S m))) l) as s.
 		 simpl. f_equal.
 		 rewrite firstn_length_le; try lia.
 		 symmetry. apply repeat_length.
 	       }
 	       destruct (le_gt_cases (k (S m)) (ml (S m) h)) as [C | C]; try assumption.
 		unfold "<" in C.
-		destruct (k (S m)); try (subst; lia).
+		destruct (k (S m)); [subst; lia|].
 		apply le_S_n in C.
-		apply ml_nth_lt in C;
-		  try assumption; try lia.
+		apply ml_lookup_lt in C; [|assumption|lia].
 		unfold h in C.
-		rewrite app_nth1 in C;
-		  try (rewrite repeat_length; lia).
-		rewrite nth_repeat_lt in C; lia.
+		rewrite lookup_total_app_l in C;
+		  [|rewrite repeat_length; lia].
+		rewrite repeat_replicate in C.
+		rewrite lookup_total_replicate_2 in C; lia.
 	  * subst md. rewrite <- Hi, El. unfold h.
-	    remember (skipn (S (k (S m))) l) as s.
-	    replace (nth (k (S m)) l :: s) with ([nth (k (S m)) l] ++ s); try reflexivity.
+	    remember (drop (S (k (S m))) l) as s.
+	    replace (l !!! (k (S m)) :: s) with ([l !!! (k (S m))] ++ s); try reflexivity.
 	    repeat rewrite ml_app. f_equal.
-	    -- replace (ml i (firstn (k (S m)) l)) with (k (S m)).
+	    -- replace (ml i (take (k (S m)) l)) with (k (S m)).
 	       ++ generalize F Hil Lm. clear.
 		  intros F Hil Lm.
 		  induction (k (S m)); try reflexivity.
@@ -354,18 +354,18 @@ Section nh.
 		  remember (k (S m)) as x eqn : E. clear E.
 		  generalize dependent x.
 		  induction fs;
-		    intros; simpl in *; try lia.
+		    intros; simpl in *; [auto|].
 		  destruct (leb_spec i a);
-		    try (inversion Fl; lia).
-		  destruct x; simpl in Lk; try lia.
+		    [|inversion Fl; lia].
+		  destruct x; simpl in Lk; [lia|].
 		  f_equal.
-		  apply IHfs; simpl in Lk; try lia.
+		  apply IHfs; simpl in Lk; [|lia].
 		  inversion Fl. assumption.
 	    -- f_equal. simpl.
-	       destruct (leb_spec i m), (leb_spec0 i (nth (k (S m)) l)); try lia.
+	       destruct (leb_spec i m), (leb_spec0 i (l !!! (k (S m)))); try lia.
 	       exfalso. apply n0.
-	       apply ml_nth_ge; try assumption. rewrite Hi.
-	       apply (ml_le l) in Hil. lia.
+	       apply ml_lookup_ge; try assumption.
+	       rewrite Hi. apply (ml_le l) in Hil. lia.
     }
 
     assert (NR :
@@ -381,10 +381,10 @@ Section nh.
       destruct m.
       + subst md. rewrite app_nil_l.
 	remember (skipn (S (k 0)) l) as s.
-	destruct s; try (inversion FS; lia).
+	destruct s; [|inversion FS; lia].
 	repeat rewrite app_nil_r.
 	clear. induction (k 0); try reflexivity.
-	simpl. destruct (ltb_spec max max); try lia.
+	simpl. destruct (ltb_spec max max); [lia|].
 	rewrite IHn. reflexivity.
       + subst md. apply next_repeat. lia.
     }
@@ -400,40 +400,49 @@ Section nh.
 	intros mlk_lt.
       generalize (firstn_skipn (k m) l).
       intros El. symmetry in El.
-      rewrite (skipn_nth 0) in El; try assumption.
+      rewrite drop_lookup in El; try assumption.
       generalize (mlk_Sk _ _ _ Hl); clear mlk_Sk;
 	intros mlk_Sk.
       destruct (GR l m k) as [n Hn]; try assumption.
       exists (S n). simpl. rewrite Hn. clear Hn n.
       assert (FR : firstn (k m) l = repeat m (k m)). {
-	apply nth_ext with 0 0.
-	- rewrite firstn_length_le; try lia.
-	  symmetry. apply repeat_length.
-	- intros n Hn.
-	  rewrite firstn_length_le in Hn; try lia.
-	  rewrite nth_repeat_lt; try lia.
+	apply list_eq. intros i.
+	destruct (le_gt_cases (k m) i).
+	- rewrite lookup_ge_None_2;
+	    [|rewrite length_take_le; lia].
+	  rewrite lookup_ge_None_2; [reflexivity|].
+	  now rewrite repeat_length.
+	- rewrite list_lookup_lookup_total;
+	    [|apply lookup_lt_is_Some; rewrite length_take_le; lia].
+	  rewrite list_lookup_lookup_total;
+	    [|apply lookup_lt_is_Some; rewrite repeat_length; lia].
+	  f_equal.
 	  rewrite El in F.
 	  apply Forall_app in F as [F _].
-	  + eapply Forall_nth in Fle; try eassumption.
-	    * apply le_antisymm; try eassumption.
-	      rewrite nth_firstn.
-	      destruct (ltb_spec n (k m)); try lia.
-	      assert (nth n l < S m); try lia.
-	      apply ml_nth_lt; try assumption; lia.
-	    * lia.
-	    * rewrite firstn_length_le; lia.
+	  eapply Forall_lookup_total in Fle;
+	    try eassumption.
+	  + apply le_antisymm; try eassumption.
+	    rewrite lookup_total_take; [|assumption].
+	    rewrite repeat_replicate.
+	    rewrite lookup_total_replicate_2;
+	      [|assumption].
+	    assert (l !!! i < S m); [|lia].
+	    apply ml_lookup_lt; try assumption; lia.
+	  + rewrite repeat_replicate.
+	    rewrite lookup_total_replicate_2;
+	      [lia|assumption].
+	  + rewrite firstn_length_le; lia.
       }
       apply NR in Hl as R; try assumption. clear NR.
       rewrite El at 2. rewrite R, FR.
-      replace (nth (k m) l :: skipn (S (k m)) l) with ([nth (k m) l] ++ skipn (S (k m)) l); try reflexivity.
+      replace (l !!! k m :: skipn (S (k m)) l) with ([l !!! k m] ++ skipn (S (k m)) l); try reflexivity.
       rewrite app_assoc. f_equal.
-      replace [nth (k m) l] with (repeat m 1).
-      + rewrite <- repeat_app. rewrite add_comm.
-	reflexivity.
+      replace [l !!! k m] with (repeat m 1).
+      + rewrite <- repeat_app. now rewrite add_comm.
       + simpl. f_equal. apply le_antisymm.
-	* apply ml_nth_ge; try assumption. lia.
-	* assert (nth (k m) l < S m); try lia.
-	  apply ml_nth_lt; try assumption. lia.
+	* apply ml_lookup_ge; try assumption. lia.
+	* assert (l !!! k m < S m); [|lia].
+	  apply ml_lookup_lt; try assumption. lia.
     }
 
     assert (forall m k, all (max - m) k ->
@@ -446,7 +455,7 @@ Section nh.
 	apply le_antisymm; try lia.
 	destruct (le_gt_cases (ml (S max) l) 0);
 	  try assumption.
-	apply ml_nth_ge in H0; try assumption.
+	apply ml_lookup_ge in H0; try assumption.
 	destruct l; simpl in *; try lia.
 	inversion F. subst. lia.
       - intros k Hk. unfold all. intros l L F Hl.

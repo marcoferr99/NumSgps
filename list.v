@@ -5,6 +5,12 @@ From stdpp Require Export list sorting.
 (** * Generic list facts *)
 (*************************)
 
+Theorem repeat_replicate {T} (x : T) n :
+  repeat x n = replicate n x.
+Proof.
+  induction n; [reflexivity|]. simpl. now f_equal.
+Qed.
+
 Theorem lookup_total_nth {T} `{Inhabited T} (l : list T) n :
   l !!! n = nth n l inhabitant.
 Proof.

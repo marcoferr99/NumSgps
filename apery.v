@@ -3,6 +3,9 @@ From Coq Require Import Lia.
 From stdpp Require Import numbers.
 Require Import nat.
 
+Generalizable No Variables.
+Generalizable Variables C M.
+
 
 Section apery.
   Context {C} M `{numerical_semigroup C M} (n : nat).
@@ -100,13 +103,12 @@ Section apery.
       + destruct IH; [assumption|lia|]. eauto.
     - intros [i Hi Hx]. unfold apery_l in Hl.
       remember n as m eqn : E. clear E.
-      induction Hl; [lia|].
-      destruct (eq_dec i i0).
+      induction Hl as [|? j ? AM ? IH]; [lia|].
+      destruct (eq_dec i j).
       + replace x with w; [left|].
-	eapply set_min_unique.
-	* apply H0.
-	* subst. apply Hx.
-      + right. apply IHHl. lia.
+	eapply set_min_unique; [apply AM|].
+	subst. apply Hx.
+      + right. apply IH. lia.
   Qed.
 
   Theorem apery_l_ex : n <> 0 -> exists l, apery_l l.
@@ -260,7 +262,8 @@ Section apery.
 End apery.
 
 
-Theorem finite_gen `{numerical_semigroup M} : exists A : propset nat, set_finite A /\ generator A.
+Theorem finite_gen `{numerical_semigroup C M} :
+  exists A : propset nat, set_finite A /\ generator A.
 Proof.
   assert (exists n, n ∈ M /\ n <> 0) as [n [Mn n0]]. {
     exists (S conductor). split; [|easy].
