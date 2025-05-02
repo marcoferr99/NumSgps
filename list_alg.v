@@ -313,7 +313,6 @@ Section nh.
 	    -- destruct (le_gt_cases (ml (S m) h) (k (S m))) as [C | C]; try assumption.
 		apply ml_lookup_ge in C; try assumption.
 		unfold h in C.
-		Search lookup_total app.
 		rewrite lookup_total_app_r in C;
 		  rewrite repeat_length in *; [|lia].
 		rewrite sub_diag in C.
