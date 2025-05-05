@@ -501,7 +501,7 @@ Section generators.
     clear. intros n0 L.
     rewrite (Div0.div_mod x n) at 1.
     rewrite (Div0.div_mod y n) at 1.
-    apply (div_le_mono y x n) in n0; [|lia].
+    generalize (Div0.div_le_mono y x n). intros Lm.
     apply add_le_mono; [|lia].
     rewrite <- add_sub_assoc; [|lia].
     rewrite sub_diag.
@@ -654,51 +654,13 @@ Section generators.
 	* lia.
   Qed.
 
-Theorem find_congr_apery_w A `{numerical_semigroup A}
-  gen i n (n0 : n <> 0) :
-  generator A (Inl gen) ->
-  term gen i -> list_min gen <> 0 ->
-  forall x, find_congr n (proj1_sig x) (small_elements gen i) = apery_w A n n0 x.
-Proof.
-  intros G T M0 x.
-  destruct (apery_w_spec A n n0) as [_ P].
-  apply P. clear P.
-  assert (SN : small_elements gen i <> []). {
-    unfold small_elements. intros C.
-    remember (small_list_limit gen i) as sl.
-    destruct sl.
-    - eapply small_list_limit_not_nil; try eassumption.
-      auto.
-    - simpl in C. discriminate.
-  }
-  destruct x as [x px]. simpl. split.
-  - split.
-    + destruct (find_congr_th n x (small_elements gen i));
-	try assumption.
-      * eapply small_elements_In; eassumption.
-      * eapply small_elements_ge_all; try eassumption.
-	replace (length (small_elements gen i) - 1) with
-	  (cond_pos gen i) in H0.
-	-- unfold small_elements in H0 at 2.
-	   rewrite nth_firstn in H0.
-	   destruct (ltb_spec (cond_pos gen i) (S (cond_pos gen i))); try lia.
-	   fold (cond gen i) in H0. lia.
-	-- unfold small_elements.
-	   rewrite firstn_length_le; try lia.
-	   unfold term in T. lia.
-    + remember (small_elements gen i) as l eqn : E.
-      clear E. induction l; try contradiction.
-      destruct l.
-      * simpl. apply mod_ge_mod.
-      * rewrite find_congr_rewrite.
-	destruct (eqb_spec (a mod n) (x mod n));
-	  try assumption.
-	apply IHl. discriminate.
-  - intros m [Am Cm].
-
 End generators.
 
-Compute small_elements_opt [4;7;10] 40.
+Compute small_elements_opt [5;9;21] 100.
+Compute match small_elements_opt [5;9;21] 100 with
+	| None => None
+	| Some l => Some (rev (apery_alg 6 l))
+	end.
 
 
 

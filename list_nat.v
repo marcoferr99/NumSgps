@@ -172,6 +172,14 @@ Proof.
 	lia.
 Qed.
 
+Theorem Sorted_lt_seq n m : Sorted lt (seq n m).
+Proof.
+  generalize dependent n.
+  induction m; simpl; [constructor|].
+  intros n. constructor; [easy|].
+  destruct m; simpl; constructor. lia.
+Qed.
+
 
 (*************************************)
 (** ** Inverse function for [lookup] *)

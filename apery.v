@@ -12,106 +12,47 @@ Section apery.
 
   (** Apery set definition *)
 
-  Fixpoint apery_l_aux_0 l :=
-    match l with
-    | [] => []
-    | h :: t => if decide (h ∈ gaps) then apery_l_aux_0 t else h :: apery_l_aux_0 t
-    end.
-
-  Theorem apery_l_aux_0_spec l x :
-    x ∈ apery_l_aux_0 l <-> x ∈ l /\ x ∈ M.
-  Proof.
-    induction l; [easy|]. split; intros Hx.
-    - simpl in *. destruct (decide (a ∈ gaps)).
-      + split; [right|]; now apply IHl.
-      + set_unfold. destruct Hx; [|intuition].
-	subst. split; [now left|].
-	now apply elem_of_gaps.
-    - destruct Hx as [Hx Mx]. simpl. set_unfold.
-      destruct Hx, (decide (a ∈ gaps)).
-      + subst. now apply elem_of_gaps' in Mx.
-      + subst. now left.
-      + intuition.
-      + right. intuition.
-  Qed.
-
-  Fixpoint apery_l_aux l :=
-    match l with
-    | [] => apery_l_aux_0 (seq 0 n)
-    | h :: t => if decide (h + n ∈ gaps) then apery_l_aux t else h + n :: apery_l_aux t
-    end.
-
-  Theorem apery_l_aux_spec l x :
-    x ∈ apery_l_aux l <-> x ∈ apery_l_aux_0 (seq 0 n) \/ (x ∈ M /\ exists a, a ∈ l /\ x = a + n).
-  Proof.
-    induction l; split; intros Hx.
-    - now left.
-    - destruct Hx as [|Hx]; [assumption|].
-      now destruct Hx as [_ [a Ha]].
-    - simpl in *. destruct (decide (a + n ∈ gaps)).
-      + apply IHl in Hx.
-	destruct Hx as [|Hx]; [intuition|].
-	right. split; [apply Hx|].
-	destruct Hx as [_ [b Hb]]. exists b.
-	split; [|apply Hb]. now right.
-      + set_unfold in Hx. destruct Hx as [|Hx].
-	* subst. right. split; [now apply elem_of_gaps|].
-	  exists a. now (split; [left|]).
-	* apply IHl in Hx.
-	  destruct Hx as [|Hx]; [intuition|].
-	  right. split; [apply Hx|].
-	  destruct Hx as [_ [b Hb]]. exists b.
-	  split; [|apply Hb]. now right.
-    - simpl. destruct (decide (a + n ∈ gaps)).
-      + apply IHl. destruct Hx as [|Hx]; [intuition|].
-	right. split; [intuition|].
-	set_unfold in Hx.
-	destruct Hx as [Hx [b [[Ib|Ib] Hb]]].
-	* subst. now apply elem_of_gaps in Hx.
-	* exists b. auto.
-      + destruct Hx as [|Hx].
-	* right. apply IHl. now left.
-	* set_unfold.
-	  destruct Hx as [Mx [b [[Ib|Ib] Hb]]]; subst;
-	    [now left|].
-	  right. apply IHl. right.
-	  split; [assumption|]. now exists b.
-  Qed.
-
-  Definition apery_l := apery_l_aux gaps.
-
   Definition apery :=
-    {[x | x ∈ M ∧ (n <= x -> x - n ∉ M)]}.
+    filter (.∈ M) ((seq 0 n) ++ map (fun x => x + n) gaps).
 
-  Theorem apery_l_apery x : x ∈ apery_l <-> x ∈ apery.
+  Theorem Sorted_lt_apery : Sorted lt apery.
   Proof.
-    unfold apery, apery_l.
-    rewrite apery_l_aux_spec, apery_l_aux_0_spec.
+    apply StronglySorted_Sorted, StronglySorted_filter.
+    apply Sorted_StronglySorted; [intros ?; lia|].
+    destruct (map (fun x => x + n) gaps) eqn : E.
+    - rewrite app_nil_r. apply Sorted_lt_seq.
+    - apply Sorted_middle.
+      + destruct gaps; [easy|].
+	simpl in E. injection E. intros _ <-.
+	apply Sorted_snoc; [apply Sorted_lt_seq|].
+	destruct n; [constructor|].
+	rewrite seq_S. constructor. lia.
+      + rewrite <- E.
+	generalize (sorted_gaps).
+	remember gaps as m. clear.
+	intros Sm. induction m; [constructor|].
+	simpl. inversion Sm as [|? ? ? Hd].
+	constructor; [auto|].
+	inversion Hd; constructor. lia.
+  Qed.
+
+  Theorem apery_spec x :
+    x ∈ apery <-> x ∈ M /\ (n <= x -> x - n ∉ M).
+  Proof.
+    unfold apery. rewrite elem_of_list_filter.
     set_unfold. split; intros Hx.
-    - destruct Hx as [[Sx Mx] | [Mx [a [Ga Ha]]]];
+    - destruct Hx as [Mx [Sx | [a [Ga Ha]]]];
 	try (split; [assumption|]).
       + apply elem_of_seq in Sx. lia.
       + subst. intros.
 	rewrite <- add_sub_assoc, sub_diag, add_0_r;
 	  [|lia].
 	now apply elem_of_gaps'.
-    - destruct Hx as [Mx Hx].
+    - destruct Hx as [Mx Hx]. split; [assumption|].
       destruct (le_gt_cases n x) as [L|L].
-      + right. split; [assumption|].
-	exists (x - n). split; [|lia].
+      + right. exists (x - n). split; [lia|].
 	apply elem_of_gaps'. auto.
-      + left. split; [|assumption].
-	apply elem_of_seq. lia.
-  Qed.
-
-  Instance apery_Decision x : Decision (x ∈ apery).
-  Proof.
-    assert (D : Decision (x ∈ M ∧ (n <= x -> x - n ∉ M))). {
-      apply and_dec; [tc_solve|].
-      apply impl_dec; [|tc_solve].
-      apply Compare_dec.le_dec.
-    }
-    unfold apery. destruct D; [left|right]; assumption.
+      + left. apply elem_of_seq. lia.
   Qed.
 
   (** The apery set of [n] does not contain two
@@ -126,6 +67,7 @@ Section apery.
       a mod n = b mod n -> a = b
     ). {
       clear a b. intros a b Aa Ab L N.
+      apply apery_spec in Aa, Ab.
       destruct (le_gt_cases n b) as [Ln | Lb].
       - destruct Ab as [_ Hb]. apply Hb in Ln.
 	apply congr_mod_divide in N. destruct N as [k Hk].
@@ -172,25 +114,25 @@ Section apery.
       symmetry. apply Div0.mod_mod.
   Qed.
 
-  Inductive apery_l_aux : nat -> list nat -> Prop :=
-    | apery_l_nil : apery_l_aux 0 []
+  Inductive apery_alt_aux : nat -> list nat -> Prop :=
+    | apery_l_nil : apery_alt_aux 0 []
     | apery_l_cons t i w : apery_min i w ->
-	apery_l_aux i t -> apery_l_aux (S i) (w :: t).
+	apery_alt_aux i t -> apery_alt_aux (S i) (w :: t).
 
-  Definition apery_l := apery_l_aux n.
+  Definition apery_alt := apery_alt_aux n.
 
-  Theorem apery_l_spec l x : apery_l l -> x ∈ l <->
+  Theorem apery_alt_spec l x : apery_alt l -> x ∈ l <->
     exists2 i, i < n & apery_min i x.
   Proof.
     intros Hl. split.
-    - intros Hx. unfold apery_l in Hl.
+    - intros Hx. unfold apery_alt in Hl.
       remember n as i eqn : E. rewrite E.
       assert (i <= n); [lia|]. clear E.
       induction Hl as [| ? ? ? ? ? IH]; [easy|].
       inversion Hx; subst.
       + exists i; [lia|assumption].
       + destruct IH; [assumption|lia|]. eauto.
-    - intros [i Hi Hx]. unfold apery_l in Hl.
+    - intros [i Hi Hx]. unfold apery_alt in Hl.
       remember n as m eqn : E. clear E.
       induction Hl as [|? j ? AM ? IH]; [lia|].
       destruct (eq_dec i j).
@@ -200,10 +142,10 @@ Section apery.
       + right. apply IH. lia.
   Qed.
 
-  Theorem apery_l_ex : n <> 0 -> exists l, apery_l l.
+  Theorem apery_alt_ex : n <> 0 -> exists l, apery_alt l.
   Proof.
-    intros n0. unfold apery_l.
-    assert (forall i, exists l, apery_l_aux i l). {
+    intros n0. unfold apery_alt.
+    assert (forall i, exists l, apery_alt_aux i l). {
       induction i as [| i [t Ht]].
       - exists []. constructor.
       - destruct (apery_min_exists n0 i) as [w Hw].
@@ -212,13 +154,19 @@ Section apery.
     auto.
   Qed.
 
-  Theorem apery_equiv l : n <> 0 -> n ∈ M -> apery_l l ->
+  Theorem apery_equiv_1 :
+    n <> 0 -> n ∈ M -> apery_alt apery.
+  Proof.
+    intros n0 Mn. apply apery_alt_spec.
+
+  Theorem apery_equiv_2 l :
+    n <> 0 -> n ∈ M -> apery_alt l ->
     forall x, x ∈ l <-> x ∈ apery.
   Proof.
     intros n0 Mn Hl.
     assert (I : forall x, x ∈ l -> x ∈ apery). {
-      intros x Hx. unfold apery.
-      destruct (apery_l_spec l x) as [[i Li Hi] _];
+      intros x Hx. apply apery_spec.
+      destruct (apery_alt_spec l x) as [[i Li Hi] _];
 	try assumption.
       unfold apery_min, set_min in *. set_unfold.
       split; [intuition|].
@@ -231,13 +179,13 @@ Section apery.
       assumption.
     }
     intros x. split; [apply I|]. intros Hx.
-    apply apery_l_spec; [assumption|].
+    apply apery_alt_spec; [assumption|].
     destruct (apery_min_all_classes n0 x) as [i Li Hi].
     destruct (apery_min_exists n0 i) as [w Hw].
     exists i; [assumption|].
     replace x with w; [assumption|].
     apply apery_congr_unique; try assumption.
-    + apply I. apply apery_l_spec; eauto.
+    + apply I. apply apery_alt_spec; eauto.
     + symmetry. now apply Hi.
   Qed.
 
