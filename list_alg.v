@@ -153,12 +153,6 @@ Section nh.
 	  constructor; [auto|].
 	  inversion Hd. constructor. assumption.
     }
-    assert (sorted_app_r :
-      forall l h, sorted (l ++ h) -> sorted h
-    ). {
-      clear. intros. induction l; [assumption|].
-      inversion H; now apply IHl.
-    }
     set (
       ml := fix ml m l :=
 	match l with
@@ -286,7 +280,7 @@ Section nh.
 	    constructor.
 	    * rewrite E.
 	      rewrite <- (firstn_skipn (S (k (S m)))) in L.
-	      apply sorted_app_r in L. assumption.
+	      apply Sorted_app_r in L. assumption.
 	    * inversion FS; constructor. lia.
       }
       apply H; try assumption.

@@ -111,6 +111,67 @@ Proof.
       intros C. apply N. subst. constructor.
 Qed.
 
+Theorem Sorted_lt_unique l :
+  Sorted lt l -> forall i j, i < length l ->
+  j < length l -> l !!! i = l !!! j -> i = j.
+Proof.
+  intros S i j Li Lj H.
+  apply Sorted_StronglySorted in S; [|intros ?; lia].
+  apply le_antisymm.
+  - eapply StronglySorted_lookup_2; try eassumption.
+    rewrite H. lia.
+  - eapply StronglySorted_lookup_2; try eassumption.
+    rewrite H. lia.
+Qed.
+
+Theorem Sorted_lt_eq l m : Sorted lt l -> Sorted lt m ->
+  (forall x, x ∈ l <-> x ∈ m) -> l = m.
+Proof.
+  generalize dependent m. induction l; intros m Sl Sm H.
+  - destruct m; [reflexivity|].
+    assert (n ∈ []); [|easy]. apply H. left.
+  - destruct m.
+    + assert (a ∈ []); [|easy]. apply H. left.
+    + destruct (eq_dec a n).
+      * subst. f_equal.
+	apply IHl; [now inversion Sl | now inversion Sm|].
+	intros x. split; intros Hx.
+	-- destruct (eq_dec n x).
+	   ++ subst.
+	      apply Sorted_StronglySorted in Sl;
+		[|intros ?; lia].
+	      inversion Sl. subst.
+	      assert (x < x); [|lia].
+	      eapply Forall_forall; eassumption.
+	   ++ assert (x ∈ n :: l); [now right|].
+	      apply H in H0.
+	      inversion H0; [lia|assumption].
+	-- destruct (eq_dec n x).
+	   ++ subst.
+	      apply Sorted_StronglySorted in Sm;
+		[|intros ?; lia].
+	      inversion Sm. subst.
+	      assert (x < x); [|lia].
+	      eapply Forall_forall; eassumption.
+	   ++ assert (x ∈ n :: m); [now right|].
+	      apply H in H0.
+	      inversion H0; [lia|assumption].
+      * apply Sorted_StronglySorted in Sl, Sm;
+	  try (intros ?; lia).
+	inversion Sl; inversion Sm. subst.
+	assert (a < n). {
+	  eapply Forall_forall; try eassumption.
+	  assert (n ∈ n :: m); [left|].
+	  apply H in H0. inversion H0; [lia|assumption].
+	}
+	assert (n < a). {
+	  eapply Forall_forall; try eassumption.
+	  assert (a ∈ a :: l); [left|].
+	  apply H in H1. inversion H1; [lia|assumption].
+	}
+	lia.
+Qed.
+
 
 (*************************************)
 (** ** Inverse function for [lookup] *)
@@ -256,7 +317,7 @@ Proof.
     + injection H. auto.
 Qed.
 
-Theorem sorted_nodup_NoDup l : Sorted le l ->
+Theorem NoDup_sorted_nodup l : Sorted le l ->
   NoDup (sorted_nodup l).
 Proof.
   induction l; intros; simpl; try constructor.
@@ -287,6 +348,14 @@ Proof.
     subst. symmetry in Heqs.
     apply sorted_nodup_head_eq in Heqs.
     constructor. inversion H2. lia.
+Qed.
+
+Theorem Sorted_lt_sorted_nodup l :
+  Sorted le l -> Sorted lt (sorted_nodup l).
+Proof.
+  intros S. apply Sorted_le_lt.
+  split; [now apply Sorted_le_sorted_nodup|].
+  now apply NoDup_sorted_nodup.
 Qed.
 
 

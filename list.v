@@ -74,6 +74,22 @@ Proof.
   eapply list_filter_subseteq. eassumption.
 Qed.
 
+Theorem Sorted_app_l {T} P (l1 l2 : list T) :
+  Sorted P (l1 ++ l2) -> Sorted P l1.
+Proof.
+  intros S. induction l1; [constructor|].
+  inversion S as [|? ? ? Hd]. subst. constructor; [auto|].
+  destruct l1; [constructor|].
+  inversion Hd. now constructor.
+Qed.
+
+Theorem Sorted_app_r {T} P (l1 l2 : list T) :
+  Sorted P (l1 ++ l2) -> Sorted P l2.
+Proof.
+  intros S. induction l1; [assumption|].
+  inversion S. auto.
+Qed.
+
 Theorem Sorted_iff {T} P Q (l : list T) :
   (forall x y, P x y <-> Q x y) ->
   Sorted P l -> Sorted Q l.

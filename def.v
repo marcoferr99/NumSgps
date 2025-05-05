@@ -89,6 +89,9 @@ Section numerical_semigroup.
     apply list_max_notin. lia.
   Qed.
 
+  Definition small_elements_list l := Sorted lt l /\
+    forall x, x ∈ l <-> x ∈ M /\ x <= conductor.
+
 End numerical_semigroup.
 
 (** Equivalent condition for a numerical semigroup *)
