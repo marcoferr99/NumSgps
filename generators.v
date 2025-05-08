@@ -1,5 +1,6 @@
 From Coq Require Import Euclid Lia.
 Require Export apery list_alg.
+Require Import gcd.
  
 Generalizable No Variables.
 Generalizable Variables C M.
@@ -110,6 +111,15 @@ Section generators.
     eapply le_trans; [|apply nhsum_le].
     apply mul_le_mono_r. now apply nh_le_length.
   Qed.
+
+  Theorem lim_th n :
+    lim gen = nhsum n -> length (nh n) = lim_ln gen.
+  Proof.
+    intros. unfold lim_ln.
+    destruct (extgcd_l (Z.of_nat <$> gen)) as (d, c) eqn : E.
+    Print nhsum.
+    assert (lim gen = 
+    Search list_alg.nh.
 
   Fixpoint small_list_aux n :=
     match n with
@@ -255,7 +265,7 @@ Section generators.
       lia.
   Qed.
 
-(** All the elements greater than or equal to cond are in A. *)
+  (** All the elements greater than or equal to cond are in A. *)
 
   Theorem cond_ge_in i : term i ->
     forall a, cond i <= a -> a ∈ M.
@@ -372,31 +382,66 @@ Section generators.
     apply elem_of_app. left. assumption.
   Qed.
 
-  Theorem small_elements_spec i :
-    term i -> small_elements_list (small_elements i).
+  Theorem Sorted_lt_small_elements i :
+    Sorted lt (small_elements i).
   Proof.
-    intros T. split.
-    - assert (SS := Sorted_lt_small_list_limit i).
-      unfold small_elements.
-      rewrite <- (take_drop (S (cond_pos i))) in SS.
-      eapply Sorted_app_l. eassumption.
-    - intros x.
-      rewrite small_elements_alt; [|assumption].
-      rewrite elem_of_list_filter.
-      split; intros [X1 X2].
-      + split; [eapply small_list_limit_in; eassumption|].
-	erewrite <- cond_conductor; eassumption.
-      + rewrite cond_conductor; [|assumption].
-	split; [assumption|].
-	apply small_list_limit_all; [assumption|].
-	apply Exists_exists. exists conductor.
-	split; [|assumption].
-	erewrite <- cond_conductor; [|eassumption].
-	now apply elem_of_list_lookup_total_2.
+    assert (SS := Sorted_lt_small_list_limit i).
+    unfold small_elements.
+    rewrite <- (take_drop (S (cond_pos i))) in SS.
+    eapply Sorted_app_l. eassumption.
+  Qed.
+
+  Theorem small_elements_small_elements_set i : term i ->
+    forall x, x ∈ small_elements i <->
+    x ∈ small_elements_set.
+  Proof.
+    intros T x.
+    rewrite small_elements_alt; [|assumption].
+    rewrite elem_of_list_filter.
+    split; intros [X1 X2].
+    - split; [eapply small_list_limit_in; eassumption|].
+      erewrite <- cond_conductor; eassumption.
+    - rewrite cond_conductor; [|assumption].
+      split; [assumption|].
+      apply small_list_limit_all; [assumption|].
+      apply Exists_exists. exists conductor.
+      split; [|assumption].
+      erewrite <- cond_conductor; [|eassumption].
+      now apply elem_of_list_lookup_total_2.
   Qed.
 
   Definition small_elements_opt i :=
     if decide (term i) then Some (small_elements i) else None.
+
+  Definition gaps_alg i :=
+    filter (.∉ (small_elements i)) (seq 0 conductor).
+
+  Theorem gaps_alg_correct i : term i -> gaps_alg i = gaps.
+  Proof.
+    intros T. apply Sorted_lt_eq.
+    - apply StronglySorted_Sorted, StronglySorted_filter.
+      apply Sorted_StronglySorted; [intros ?; lia|].
+      apply Sorted_lt_seq.
+    - apply sorted_gaps.
+    - intros x. unfold gaps_alg.
+      rewrite elem_of_list_filter, elem_of_gaps'.
+      split.
+      + intros [Sx Hx] N.
+	destruct (le_gt_cases x conductor).
+	* apply Sx.
+	  apply small_elements_small_elements_set;
+	    [assumption|].
+	  unfold small_elements_set. set_unfold. auto.
+	* apply elem_of_seq in Hx. lia.
+      + intros Hx. split.
+	* intros N.
+	  apply small_elements_small_elements_set in N;
+	    [|assumption].
+	  now destruct N.
+	* apply elem_of_seq.
+	  destruct (le_gt_cases conductor x); [|lia].
+	  exfalso. apply Hx. now apply conductor_le_in.
+  Qed.
 
 
   (**********)
@@ -589,24 +634,31 @@ Section generators.
     | S m => find_congr n m l :: apery_alg_aux n m l
     end.
 
-  Definition apery_alg n l := apery_alg_aux n n l.
+  Definition apery_alg n i :=
+    apery_alg_aux n n (small_elements i).
 
-  Theorem apery_alg_correct n l : n <> 0 ->
-    small_elements_list l -> apery_l M n (apery_alg n l).
+  Theorem apery_alg_correct n i :
+    term i -> n <> 0 -> n ∈ M ->
+    forall x, x ∈ apery_alg n i <-> x ∈ apery_set M n.
   Proof.
-    intros n0 L. unfold apery_alg, apery_l.
-    assert (forall m, apery_l_aux M n m (apery_alg_aux n m l)); [|auto].
-    induction m; [constructor|].
-    assert (l0 : l <> []). {
+    intros T n0 Mn x.
+    rewrite apery_equiv; try assumption; [|tc_solve].
+    unfold apery_alg, apery_set_2. set_unfold.
+    assert (forall m, x ∈ apery_alg_aux n m (small_elements i) <-> (exists2 i, i < m & apery_min M n i x)); [|auto].
+    induction m.
+    { simpl. split; [easy|]. intros []. lia. }
+    assert (l0 : small_elements i <> []). {
       intros N. assert (0 ∈ []); [|easy].
-      rewrite <- N. apply L. split; [apply ns_zero|lia].
+      rewrite <- N.
+      apply small_elements_small_elements_set; [assumption|].
+      split; [apply ns_zero | lia].
     }
-    assert (E : l !!! (length l - 1) = conductor). {
-      destruct L as [SS L].
-      edestruct (elem_of_list_split l) as (l1 & l2 & Hl).
-      * apply L.
+    assert (E : (small_elements i) !!! (length (small_elements i) - 1) = conductor). {
+      edestruct (elem_of_list_split (small_elements i)) as (l1 & l2 & Hl).
+      * apply small_elements_small_elements_set; [assumption|].
 	split; [apply conductor_le_in|]; apply le_refl.
-      * rewrite Hl in SS.
+      * generalize (Sorted_lt_small_elements i). intros SS.
+	rewrite Hl in SS.
 	apply Sorted_app_r in SS.
 	apply Sorted_StronglySorted in SS;
 	  [|intros ?; lia].
@@ -618,19 +670,54 @@ Section generators.
 	   assert (conductor < l !!! (length l - 1)). {
 	     eapply Forall_forall; [eassumption|].
 	     subst.
-	     rewrite length_app. simpl.
-	     rewrite lookup_total_app_r; [|lia].
-	     rewrite lookup_total_cons_ne_0; [|lia].
 	     apply elem_of_list_lookup_total_2.
 	     simpl. lia.
 	   }
 	   assert (l !!! (length l - 1) <= conductor);
 	     [|lia].
-	     apply L.
+	   assert (l !!! (length l - 1) ∈ small_elements i). {
+	     rewrite Hl. subst.
+	     apply elem_of_app. right.
+	     simpl. right.
 	     apply elem_of_list_lookup_total_2.
-	     destruct (nil_or_length_pos l);
-	       [contradiction|lia].
+	     simpl. lia.
+	   }
+	   apply small_elements_small_elements_set in H12; [|assumption].
+	   unfold small_elements_set in H12. set_unfold.
+	   apply H12.
     }
+    split.
+    - intros Hx. simpl in Hx.
+      set_unfold. destruct Hx.
+      + exists m; [lia|].
+	unfold apery_min, set_min. set_unfold.
+	split; [split|].
+	* apply (find_congr_th n m (small_elements i)) in n0 as F;
+	   [|assumption].
+	  destruct F.
+	  -- subst. eapply small_elements_in. eassumption.
+	  -- rewrite E in H8. subst.
+	     apply conductor_le_in. lia.
+	* subst. now apply find_congr_congr.
+	* subst.
+	  intros x [Mx Hx].
+	  destruct (decide (x ∈ (small_elements i))).
+	  -- apply find_congr_min; try assumption.
+	     ++ apply Sorted_lt_small_elements.
+	     ++ auto with congr_mod.
+		-- assert (conductor < x). {
+		   apply dec_stable. intros N. apply n1.
+		   apply small_elements_small_elements_set; [assumption|].
+		   split; [assumption|lia].
+		}
+		apply congr_mod_symm in Hx.
+		apply find_congr_min_2; try assumption.
+		** apply Sorted_lt_small_elements.
+		** lia.
+      + apply IHm in H7. destruct H7. exists x0.
+	* lia.
+	* assumption.
+    -
     simpl. constructor; [|assumption].
     unfold apery_min, set_min. set_unfold. split.
     - destruct (find_congr_th n m l); try assumption.
