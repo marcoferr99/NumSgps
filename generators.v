@@ -112,14 +112,15 @@ Section generators.
     apply mul_le_mono_r. now apply nh_le_length.
   Qed.
 
-  Theorem lim_th n :
-    lim gen = nhsum n -> length (nh n) = lim_ln gen.
+  Theorem th x :
+    sum_list_with (gen !!!.) (replicate ((x / mlt) + 1) (lookup_inv gen mlt)) = ((x / mlt) + 1) * mlt.
   Proof.
-    intros. unfold lim_ln.
-    destruct (extgcd_l (Z.of_nat <$> gen)) as (d, c) eqn : E.
-    Print nhsum.
-    assert (lim gen = 
-    Search list_alg.nh.
+    rewrite sum_list_with_map.
+    rewrite fmap_replicate.
+    rewrite sum_list_replicate.
+    rewrite lookup_lookup_inv; [lia|].
+    apply list_min_in. apply gen_neq.
+  Qed.
 
   Fixpoint small_list_aux n :=
     match n with
