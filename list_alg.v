@@ -1,5 +1,5 @@
-From Coq Require Import Lia.
 Require Export list_nat.
+From Coq Require Import Lia.
 
 
 (**********************)
@@ -35,6 +35,79 @@ Section nh.
     simpl. destruct (ltb_spec a max); try discriminate.
     destruct (next l); [contradiction | discriminate].
   Qed.
+
+  Theorem next_repeat l n m : m < max ->
+    next (repeat max n ++ m :: l) =
+    repeat (S m) (S n) ++ l.
+  Proof.
+    intros Hm.
+    replace (repeat (S m) (S n) ++ l) with (repeat (S m) n ++ next (m :: l)). 2:{
+      replace (S n) with (n + 1); try lia.
+      rewrite repeat_app. simpl.
+      destruct (ltb_spec m max); try lia.
+      rewrite <- app_assoc. reflexivity.
+    }
+    induction n as [ | n IH]; try reflexivity.
+    remember (m :: l) as ml. simpl.
+    destruct (ltb_spec max max); try lia. rewrite IH.
+    remember (repeat (S m) n ++ next ml) as t eqn : Eh.
+    destruct t as [ | h t].
+    - exfalso. eapply next_not_nil. eassumption.
+    - f_equal. destruct n; simpl in *.
+      + subst. simpl in IH.
+	destruct (ltb_spec m max); try lia.
+	injection IH. auto.
+      + injection Eh. auto.
+  Qed.
+
+  Theorem next_Forall l :
+    Forall_max l -> Forall_max (next l).
+  Proof.
+    intros F. induction l as [ | h t IH].
+    - simpl. constructor; [lia | constructor].
+    - inversion F as [ | n l _ Ft].
+      simpl. destruct (ltb_spec h max); subst.
+      + constructor; assumption.
+      + remember (next t) as nt.
+	destruct nt; constructor; auto.
+	apply IH in Ft. inversion Ft. assumption.
+  Qed.
+
+  Theorem next_sorted l : sorted l -> sorted (next l).
+  Proof.
+    intros L.
+    induction l as [ | h t IH]; simpl;
+      [constructor; constructor|].
+    inversion L as [|? ? ? Hd].
+    destruct (ltb_spec h max).
+    - constructor; [assumption|].
+      inversion Hd; constructor. lia.
+    - remember (next t) as nt.
+      destruct nt; constructor; [auto|].
+      constructor. lia.
+  Qed.
+
+  Theorem next_length l : length (next l) = length l \/
+    length (next l) = S (length l).
+  Proof.
+    induction l; simpl; [intuition | ].
+    destruct (ltb_spec a max); simpl; [intuition | ].
+    remember (next l) as nl eqn : E. destruct nl.
+    - exfalso. eapply next_not_nil. eauto.
+    - simpl in *. intuition.
+  Qed.
+
+  Theorem next_length_le l : length l <= length (next l).
+  Proof.
+    generalize (next_length l). intros. intuition lia.
+  Qed.
+
+
+  (*************************)
+  (** *** Inverse for next *)
+  (*************************)
+
+  (** This function is not used for now *)
 
   Fixpoint next_inv l :=
     match l with
@@ -127,235 +200,46 @@ Section nh.
 	  inversion F. lia.
   Qed.
 
-  Theorem next_repeat l n m : m < max ->
-    next (repeat max n ++ m :: l) =
-    repeat (S m) (S n) ++ l.
-  Proof.
-    intros Hm.
-    replace (repeat (S m) (S n) ++ l) with (repeat (S m) n ++ next (m :: l)). 2:{
-      replace (S n) with (n + 1); try lia.
-      rewrite repeat_app. simpl.
-      destruct (ltb_spec m max); try lia.
-      rewrite <- app_assoc. reflexivity.
-    }
-    induction n as [ | n IH]; try reflexivity.
-    remember (m :: l) as ml. simpl.
-    destruct (ltb_spec max max); try lia. rewrite IH.
-    remember (repeat (S m) n ++ next ml) as t eqn : Eh.
-    destruct t as [ | h t].
-    - exfalso. eapply next_not_nil. eassumption.
-    - f_equal. destruct n; simpl in *.
-      + subst. simpl in IH.
-	destruct (ltb_spec m max); try lia.
-	injection IH. auto.
-      + injection Eh. auto.
-  Qed.
-
-  Theorem next_Forall l :
-    Forall_max l -> Forall_max (next l).
-  Proof.
-    intros F. induction l as [ | h t IH].
-    - simpl. constructor; [lia | constructor].
-    - inversion F as [ | n l _ Ft].
-      simpl. destruct (ltb_spec h max); subst.
-      + constructor; assumption.
-      + remember (next t) as nt.
-	destruct nt; constructor; auto.
-	apply IH in Ft. inversion Ft. assumption.
-  Qed.
-
-  Theorem next_sorted l : sorted l -> sorted (next l).
-  Proof.
-    intros L.
-    induction l as [ | h t IH]; simpl;
-      [constructor; constructor|].
-    inversion L as [|? ? ? Hd].
-    destruct (ltb_spec h max).
-    - constructor; [assumption|].
-      inversion Hd; constructor. lia.
-    - remember (next t) as nt.
-      destruct nt; constructor; [auto|].
-      constructor. lia.
-  Qed.
-
-  Theorem next_length l : length (next l) = length l \/
-    length (next l) = S (length l).
-  Proof.
-    induction l; simpl; [intuition | ].
-    destruct (ltb_spec a max); simpl; [intuition | ].
-    remember (next l) as nl eqn : E. destruct nl.
-    - exfalso. eapply next_not_nil. eauto.
-    - simpl in *. intuition.
-  Qed.
-
-  Theorem next_length_le l : length l <= length (next l).
-  Proof.
-    generalize (next_length l). intros. intuition lia.
-  Qed.
-
 
   (****************)
   (** ** Nth list *)
   (****************)
 
-  Fixpoint nh_l n l :=
+  Fixpoint nh n :=
     match n with
-    | 0 => l
-    | S n => next (nh_l n l)
+    | 0 => []
+    | S n => next (nh n)
     end.
-
-  Definition nh n := nh_l n [].
 
   (** Gli elementi delle liste generate da
       [nh] sono minori o uguali a [max] *)
 
-  Theorem nh_l_Forall n l :
-    Forall_max l -> Forall_max (nh_l n l).
+  Theorem nh_Forall n : Forall_max (nh n).
   Proof.
-    induction n; [auto|].
-    simpl. intros. apply next_Forall. auto.
+    induction n; [constructor | ].
+    simpl. apply next_Forall. assumption.
   Qed.
 
   (** Le liste generate da [nh] sono ordinate. *)
 
-  Theorem nh_l_sorted n l :
-    sorted l -> sorted (nh_l n l).
+  Theorem nh_sorted n : sorted (nh n).
   Proof.
-    induction n; [auto|].
-    intros. simpl. apply next_sorted. auto.
+    induction n; [constructor | ].
+    simpl. apply next_sorted. assumption.
   Qed.
 
-  Fixpoint nh_inv n l :=
-    match n with
-    | 0 => l
-    | S n => next_inv (nh_inv n l)
-    end.
+  (** [nh] genera le liste in ordine
+      crescente di lunghezza *)
 
-  Theorem nh_inv_Forall n l :
-    Forall_max l -> Forall_max (nh_inv n l).
+  Theorem nh_le_length m n :
+    m <= n -> length (nh m) <= length (nh n).
   Proof.
-    induction n; [auto|].
-    simpl. intros. apply next_inv_Forall. auto.
+    intros. induction n.
+    - destruct m; lia.
+    - destruct (eq_dec m (S n)); try (subst; lia).
+      unfold nh in *. simpl.
+      rewrite <- next_length_le. intuition lia.
   Qed.
-
-  Theorem nh_inv_sorted n l :
-    Forall_max l -> sorted l -> sorted (nh_inv n l).
-  Proof.
-    induction n; [auto|].
-    intros. simpl. apply next_inv_sorted; [|auto].
-    now apply nh_inv_Forall.
-  Qed.
-
-  Theorem nh_inv_neq n l : nh_inv n l <> [] ->
-    forall m, m <= n -> nh_inv m l <> [].
-  Proof.
-    intros N m L.
-    induction n.
-    - replace m with 0; [|lia]. assumption.
-    - destruct (eq_dec m (S n)).
-      + subst. simpl in *. assumption.
-      + apply IHn; [|lia].
-	simpl in N. now apply next_inv_neq in N.
-  Qed.
-
-  Theorem nh_inv_nh l n m : sorted l -> Forall_max l ->
-    nh_inv m (nh_l (m + n) l) = nh_l n l.
-  Proof.
-    intros R F.
-    generalize dependent n.
-    induction m; simpl; [reflexivity|].
-    intros. specialize IHm with (S n).
-    replace (m + (S n)) with (S m + n) in IHm; [|lia].
-    simpl in IHm. rewrite IHm. apply next_inv_next.
-    - now apply nh_l_sorted.
-    - now apply nh_l_Forall.
-  Qed.
-
-  Theorem nh_l_nh_inv l n m :
-    nh_inv (m + n) l <> [] -> sorted l -> Forall_max l ->
-    nh_l m (nh_inv (m + n) l) = nh_inv n l.
-  Proof.
-    intros l0 R F.
-    generalize dependent n.
-    induction m; [reflexivity|].
-    intros. specialize IHm with (S n).
-    replace (m + (S n)) with (S m + n) in IHm; [|lia].
-    simpl. simpl in IHm. rewrite IHm; try assumption.
-    apply next_next_inv.
-    - eapply nh_inv_neq; [apply l0|]. lia.
-    - now apply nh_inv_sorted.
-    - now apply nh_inv_Forall.
-  Qed.
-
-  Definition aux0 l := ((l * (l + 1)) / 2).
-
-  Definition binom n k :=
-    fact n / (fact k * (fact (n - k))).
-
-  Theorem binom_0 n : binom n 0 = 1.
-  Proof.
-    unfold binom. simpl. rewrite add_0_r, sub_0_r.
-    apply div_same. generalize (lt_O_fact n). lia.
-  Qed.
-
-  Fixpoint nhinv_aux n l :=
-    match l with
-    | [] => 0
-    | h :: t =>
-	sum_list_with (fun x => binom ((max - x) + n) n) (seq 0 (S h)) + nhinv_aux (S n) t
-    end.
-
-  Theorem nhinv_aux_app n l m :
-    nhinv_aux n (l ++ m) = nhinv_aux n l + nhinv_aux (n + length l) m.
-  Proof.
-    generalize dependent n.
-    induction l; simpl; intros; [now rewrite add_0_r|].
-    rewrite IHl. rewrite add_assoc. f_equal.
-    f_equal. lia.
-  Qed.
-
-  Definition nhinv := nhinv_aux 0.
-
-  Theorem binom_sub n k : k <= n ->
-    binom n k = binom n (n - k).
-  Proof.
-    intros L. unfold binom.
-    rewrite mul_comm.
-    do 3 f_equal. lia.
-  Qed.
-  
-  Theorem binom_S n k : k < n ->
-    binom (S n) (S k) = binom n k + binom n (S k).
-  Proof.
-    intros L. unfold binom.
-    replace (S n - S k) with (S (n - S k)); [|lia].
-    replace (fact (S n)) with (S n * fact n); [|reflexivity].
-    replace (S n) with (S (n - S k) + S k); [|lia].
-    rewrite mul_add_distr_r.
-    assert (forall a b c, c <> 0 -> (c | a) -> (a + b) / c = a / c + b / c). {
-      intros. destruct H0. subst.
-      rewrite div_add_l; [|assumption].
-      rewrite Lcm0.divide_div_mul_exact.
-      - rewrite div_same; [lia|assumption].
-      - exists 1. lia.
-    }
-    rewrite H.
-    - replace (fact (S (n - S k))) with (S (n - S k) * fact (n - S k)) at 1; [|reflexivity].
-      rewrite mul_assoc.
-      rewrite (mul_comm (fact (S k))).
-      rewrite <- mul_assoc.
-      rewrite Div0.div_mul_cancel_l; [|lia].
-      rewrite add_comm. f_equal.
-      replace (fact (S k)) with ((S k) * fact k); [|reflexivity].
-      rewrite <- mul_assoc.
-      rewrite Div0.div_mul_cancel_l; [|lia].
-      do 3 f_equal. lia.
-    - generalize lt_O_fact. intros G.
-      specialize G with (S k) as G1.
-      specialize G with (S (n - S k)).
-      lia.
-    -
-  Abort.
 
   Theorem nh_all : forall l, Forall_max l -> sorted l ->
     exists n, nh n = l.
@@ -751,34 +635,30 @@ Section nh.
 	subst. rewrite ml_0. rewrite <- Heqln. reflexivity.
   Qed.
 
-  (** [nh] genera le liste in ordine
-      crescente di lunghezza *)
 
-  Theorem nh_le_length m n :
-    m <= n -> length (nh m) <= length (nh n).
+  (***********************)
+  (** *** Inverse for nh *)
+  (***********************)
+
+  Definition binom n k :=
+    fact n / (fact k * fact (n - k)).
+
+  Fixpoint nhinv_aux n l :=
+    match l with
+    | [] => 0
+    | h :: t =>
+	sum_list_with (fun x => binom ((max - x) + n) n) (seq 0 (S h)) + nhinv_aux (S n) t
+    end.
+
+  Theorem nhinv_aux_app n l m :
+    nhinv_aux n (l ++ m) = nhinv_aux n l + nhinv_aux (n + length l) m.
   Proof.
-    intros. induction n.
-    - destruct m; lia.
-    - destruct (eq_dec m (S n)); try (subst; lia).
-      unfold nh in *. simpl.
-      rewrite <- next_length_le. intuition lia.
+    generalize dependent n.
+    induction l; simpl; intros; [now rewrite add_0_r|].
+    rewrite IHl. rewrite add_assoc. f_equal.
+    f_equal. lia.
   Qed.
 
-  (** Gli elementi delle liste generate da
-      [nh] sono minori o uguali a [max] *)
-
-  Theorem nh_Forall n : Forall_max (nh n).
-  Proof.
-    induction n; [constructor | ].
-    simpl. apply next_Forall. assumption.
-  Qed.
-
-  (** Le liste generate da [nh] sono ordinate. *)
-
-  Theorem nh_sorted n : sorted (nh n).
-  Proof.
-    induction n; [constructor | ].
-    simpl. apply next_sorted. assumption.
-  Qed.
+  Definition nhinv := nhinv_aux 0.
 
 End nh.

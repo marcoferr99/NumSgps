@@ -303,7 +303,7 @@ Section generators.
 	* apply elem_of_gaps.
 	  eapply cond_ge_in; [eassumption|]. lia.
 	* rewrite Eg. left.
-      + f_equal. Search list_max.
+      + f_equal.
 	apply le_antisymm.
 	* destruct (le_gt_cases c (list_max gaps));
 	    [assumption|].
