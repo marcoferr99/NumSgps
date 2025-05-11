@@ -344,3 +344,372 @@ Proof.
   - right. now apply apery_apery_set.
   - set_unfold. intuition.
 Qed.
+
+
+(**********)
+(** Apery *)
+(**********)
+
+Definition mod_ge n a x :=
+  let r := x - x mod n + a mod n in
+  if x <=? r then r else r + n.
+
+Theorem mod_ge_mod n a x : (mod_ge n a x) mod n = a mod n.
+Proof.
+  unfold mod_ge.
+  assert (E : (x - x mod n) mod n = 0). {
+    generalize (Div0.div_mod x n). intros D.
+    replace (x - x mod n) with (n * (x / n)); try lia.
+    rewrite mul_comm. apply Div0.mod_mul.
+  }
+  destruct (leb_spec x (x - x mod n + a mod n)).
+  - rewrite <- Div0.add_mod_idemp_l. rewrite E.
+    simpl. apply Div0.mod_mod.
+  - rewrite <- add_assoc. rewrite <- Div0.add_mod_idemp_l.
+    rewrite E. simpl.
+    rewrite <- (Div0.add_mod_idemp_r _ n).
+    rewrite Div0.mod_same. rewrite add_0_r.
+    apply Div0.mod_mod.
+Qed.
+
+Theorem mod_ge_ge n a x : n <> 0 -> x <= mod_ge n a x.
+Proof.
+  intros n0. unfold mod_ge.
+  destruct (leb_spec x (x - x mod n + a mod n)); try lia.
+  apply (mod_upper_bound a) in n0 as U.
+  apply (mod_upper_bound x) in n0. lia.
+Qed.
+
+Theorem mod_ge_lt n a x : n <> 0 -> mod_ge n a x < x + n.
+Proof.
+  intros n0. unfold mod_ge.
+  destruct (leb_spec x (x - x mod n + a mod n)); try lia.
+  apply (mod_upper_bound a) in n0 as U.
+  apply (mod_upper_bound x) in n0. lia.
+Qed.
+
+Theorem mod_ge_congr n a x :
+  congr_mod n a x -> mod_ge n a x = x.
+Proof.
+  intros I. unfold mod_ge. unfold congr_mod in I.
+  destruct (leb_spec x (x - x mod n + a mod n)); [|lia].
+  generalize (Div0.mod_le x n). intros D. lia.
+Qed.
+
+
+Fixpoint find_congr n a l := let an := a mod n in
+  match l with
+  | [] => 0
+  | [e] => mod_ge n a e
+  | h :: t => if h mod n =? an then h else find_congr n a t
+  end.
+
+Theorem find_congr_rewrite n a x y t :
+  find_congr n a (x :: y :: t) =
+  if x mod n =? a mod n then x else find_congr n a (y :: t).
+Proof. reflexivity. Qed.
+
+Theorem find_congr_congr n a l :
+  l <> [] -> congr_mod n (find_congr n a l) a.
+Proof.
+  induction l; [easy|].
+  simpl. destruct l; [intros; apply mod_ge_mod|].
+  intros. destruct (eqb_spec (a0 mod n) (a mod n));
+    [assumption|].
+  auto.
+Qed.
+
+Theorem find_congr_min n a l x :
+  Sorted lt l -> n <> 0 -> x ∈ l ->
+  congr_mod n a x -> find_congr n a l <= x.
+Proof.
+  intros SS n0 Lx I. induction l; simpl; [lia|].
+  destruct l.
+  - set_unfold. destruct Lx; [|easy]. subst.
+    rewrite mod_ge_congr; [lia|assumption].
+  - destruct (eqb_spec (a0 mod n) (a mod n)).
+    + destruct (eq_dec a0 x); [lia|].
+      apply Sorted_StronglySorted in SS;
+	[|intros ?; lia].
+      inversion SS. assert (a0 < x); [|lia].
+      eapply Forall_forall; try eassumption.
+      inversion Lx; [|assumption].
+      subst. contradiction.
+    + destruct (eq_dec x a0).
+      * subst. unfold congr_mod in I. symmetry in I.
+	contradiction.
+      * apply IHl; [now inversion SS|].
+	inversion Lx; now subst.
+Qed.
+
+Theorem test n x y :
+  n <> 0 -> x > y -> x >= y - y mod n + x mod n.
+Proof.
+  clear. intros n0 L.
+  rewrite (Div0.div_mod x n) at 1.
+  rewrite (Div0.div_mod y n) at 1.
+  generalize (Div0.div_le_mono y x n). intros Lm.
+  apply add_le_mono; [|lia].
+  rewrite <- add_sub_assoc; [|lia].
+  rewrite sub_diag.
+  remember (y / n) as b eqn : E. clear E.
+  remember (x / n) as a eqn : E. clear E.
+  induction n; lia.
+Qed.
+
+Theorem test2 n x y :
+  congr_mod n x y -> x > y -> exists q, x = q * n + y.
+Proof.
+  clear. intros H L.
+  assert ((x - y) mod n = 0). {
+    apply congr_mod_symm in H.
+    apply congr_mod_divide in H.
+    destruct H. rewrite H.
+    apply Div0.mod_mul.
+  }
+  apply (Lcm0.mod_divide (x - y) n) in H0.
+  destruct H0. exists x0. lia.
+Qed.
+
+Theorem find_congr_min_2 n a l x :
+  Sorted lt l -> n <> 0 -> x > l !!! (length l - 1) ->
+  congr_mod n a x -> find_congr n a l <= x.
+Proof.
+  clear.
+  intros SS n0 Lx I. induction l; simpl; [lia|].
+  destruct l.
+  - set_unfold.
+    unfold mod_ge.
+    rewrite I.
+    destruct (leb_spec a0 (a0 - a0 mod n + x mod n)).
+    + apply test; [assumption|lia].
+    + replace (a0 - a0 mod n + x mod n + n) with (a0 - a0 mod n + n + x mod n); [|lia].
+      assert (x mod n < a0 mod n); [lia|].
+      assert (a0 - a0 mod n + n <= x - x mod n); [|lia].
+      destruct (test2 n (x - x mod n) (a0 - a0 mod n)).
+      * unfold congr_mod.
+	rewrite (div_mod_eq a0 n) at 1.
+	rewrite <- add_sub_assoc, sub_diag, add_0_r; [|lia].
+	rewrite mul_comm, Div0.mod_mul.
+	rewrite (div_mod_eq x n) at 1.
+	rewrite <- add_sub_assoc, sub_diag, add_0_r; [|lia].
+	rewrite mul_comm, Div0.mod_mul.
+	reflexivity.
+      * lia.
+      * destruct x0.
+	-- simpl in *. lia.
+	-- lia.
+  - destruct (eqb_spec (a0 mod n) (a mod n)).
+    + simpl in *.
+      apply Sorted_StronglySorted in SS; [|intros ?; lia].
+      inversion SS. subst.
+      assert (a0 < (n1 :: l) !!! length l); [|lia].
+      eapply Forall_forall; [eassumption|].
+      apply elem_of_list_lookup_total_2.
+      simpl. lia.
+    + apply IHl; [now inversion SS|].
+      simpl in *. now rewrite sub_0_r.
+Qed.
+
+Theorem find_congr_th n a l : n <> 0 -> l <> [] ->
+  find_congr n a l ∈ l \/
+  find_congr n a l > l !!! (length l - 1).
+Proof.
+  intros n0 ln. induction l as [ | h t IH]; try contradiction.
+  destruct t as [ | k t].
+  - simpl in *.
+    destruct (eq_dec h (mod_ge n a h));
+      [set_unfold; intuition|].
+    right. apply (mod_ge_ge _ a h) in n0. lia.
+  - rewrite find_congr_rewrite.
+    destruct (eqb_spec (h mod n) (a mod n)).
+    + simpl. set_unfold. intuition.
+    + remember (find_congr n a (k :: t)) as l.
+      destruct IH as [IH|IH]; try discriminate.
+      * left. simpl in *. set_unfold. intuition.
+      * right. simpl in *. now rewrite sub_0_r in IH.
+Qed.
+
+Fixpoint apery_alg_aux n m l :=
+  match m with
+  | 0 => []
+  | S m => find_congr n m l :: apery_alg_aux n m l
+  end.
+
+Definition apery_alg l n :=
+  apery_alg_aux n n l.
+
+Theorem apery_alg_correct n i :
+  term i -> n <> 0 -> n ∈ M ->
+  forall x, x ∈ apery_alg n i <-> x ∈ apery_set M n.
+Proof.
+  intros T n0 Mn x.
+  rewrite apery_equiv; try assumption; [|tc_solve].
+  unfold apery_alg, apery_set_2. set_unfold.
+  assert (forall m, x ∈ apery_alg_aux n m (small_elements i) <-> (exists2 i, i < m & apery_min M n i x)); [|auto].
+  induction m.
+  { simpl. split; [easy|]. intros []. lia. }
+  assert (l0 : small_elements i <> []). {
+    intros N. assert (0 ∈ []); [|easy].
+    rewrite <- N.
+    apply small_elements_small_elements_set; [assumption|].
+    split; [apply ns_zero | lia].
+  }
+  assert (E : (small_elements i) !!! (length (small_elements i) - 1) = conductor). {
+    edestruct (elem_of_list_split (small_elements i)) as (l1 & l2 & Hl).
+    * apply small_elements_small_elements_set; [assumption|].
+      split; [apply conductor_le_in|]; apply le_refl.
+    * generalize (Sorted_lt_small_elements i). intros SS.
+      rewrite Hl in SS.
+      apply Sorted_app_r in SS.
+      apply Sorted_StronglySorted in SS;
+	[|intros ?; lia].
+      destruct l2.
+      -- rewrite Hl.
+	 apply list_lookup_total_middle.
+	 rewrite length_app. simpl. lia.
+      -- inversion SS.
+	 assert (conductor < l !!! (length l - 1)). {
+	   eapply Forall_forall; [eassumption|].
+	   subst.
+	   apply elem_of_list_lookup_total_2.
+	   simpl. lia.
+	 }
+	 assert (l !!! (length l - 1) <= conductor);
+	   [|lia].
+	 assert (l !!! (length l - 1) ∈ small_elements i). {
+	   rewrite Hl. subst.
+	   apply elem_of_app. right.
+	   simpl. right.
+	   apply elem_of_list_lookup_total_2.
+	   simpl. lia.
+	 }
+	 apply small_elements_small_elements_set in H12; [|assumption].
+	 unfold small_elements_set in H12. set_unfold.
+	 apply H12.
+  }
+  split.
+  - intros Hx. simpl in Hx.
+    set_unfold. destruct Hx.
+    + exists m; [lia|].
+      unfold apery_min, set_min. set_unfold.
+      split; [split|].
+      * apply (find_congr_th n m (small_elements i)) in n0 as F;
+	 [|assumption].
+	destruct F.
+	-- subst. eapply small_elements_in. eassumption.
+	-- rewrite E in H8. subst.
+	   apply conductor_le_in. lia.
+      * subst. now apply find_congr_congr.
+      * subst.
+	intros x [Mx Hx].
+	destruct (decide (x ∈ (small_elements i))).
+	-- apply find_congr_min; try assumption.
+	   ++ apply Sorted_lt_small_elements.
+	   ++ auto with congr_mod.
+	      -- assert (conductor < x). {
+		 apply dec_stable. intros N. apply n1.
+		 apply small_elements_small_elements_set; [assumption|].
+		 split; [assumption|lia].
+	      }
+	      apply congr_mod_symm in Hx.
+	      apply find_congr_min_2; try assumption.
+	      ** apply Sorted_lt_small_elements.
+	      ** lia.
+    + apply IHm in H7. destruct H7. exists x0.
+      * lia.
+      * assumption.
+  -
+  simpl. constructor; [|assumption].
+  unfold apery_min, set_min. set_unfold. split.
+  - destruct (find_congr_th n m l); try assumption.
+    + split; [now apply L|]. now apply find_congr_congr.
+    + unfold small_elements_list in L.
+      rewrite E in *. split.
+      * apply conductor_le_in. lia.
+      * now apply find_congr_congr.
+  - intros x [Mx Hx].
+    destruct (decide (x ∈ l)).
+    + apply find_congr_min; try assumption.
+      * apply L.
+      * auto with congr_mod.
+    + assert (conductor < x). {
+	apply dec_stable. intros N. apply n1.
+	apply L. split; [assumption|lia].
+      }
+      apply congr_mod_symm in Hx.
+      apply find_congr_min_2; try assumption.
+      * apply L.
+      * lia.
+Qed.
+
+End generators.
+
+Compute small_elements_opt [5;9;21] 100.
+Compute match small_elements_opt [5;9;21] 100 with
+      | None => None
+      | Some l => Some (rev (apery_alg 6 l))
+      end.
+
+
+
+
+Theorem i_not_zero i : term i -> i <> 0.
+Proof.
+  unfold term. intros T ?. subst. simpl in T. lia.
+Qed.
+
+Theorem nth_limit_not_zero i :
+  term i -> nth_limit i <> 0.
+Proof.
+  unfold nth_limit. intros T N.
+  apply eq_mul_0_r in N; try contradiction.
+  destruct i.
+  - apply i_not_zero in T. contradiction.
+  - intros D. apply length_zero_iff_nil in D.
+    simpl in D. eapply next_not_nil. eassumption.
+Qed.
+
+Theorem small_list_limit_not_nil i :
+  term i -> small_list_limit i <> [].
+Proof.
+  intros T D.
+  generalize (small_list_all i 0). intros I.
+  unfold small_list_limit in *.
+  assert (N : 0 ∈ []); try inversion N.
+  rewrite <- D. apply elem_of_list_filter.
+  apply nth_limit_not_zero in T. split; [lia|].
+  apply I; try apply ns_zero. lia.
+Qed.
+
+(** [small_elements] contains all the elements of [A] that are less then or
+  equal to [cond]. *)
+
+Theorem small_elements_le_all i : term i ->
+  forall a, a ∈ M -> a <= cond i ->
+  a ∈ small_elements i.
+Proof.
+  intros T a Aa L.
+  assert (Is : a ∈ small_list_limit i). {
+    eapply small_list_limit_all; try eassumption.
+    apply Exists_exists. exists (cond i).
+    split; try assumption. 
+    now apply elem_of_list_lookup_total_2.
+  }
+  apply elem_of_list_lookup_total_1 in Is.
+  destruct Is as [n [Hn1 Hn2]]. subst a.
+  unfold cond in L.
+  assert (n <= cond_pos i). {
+    apply nlt_ge. intros ?.
+    apply nlt_ge in L. apply L. clear L.
+    apply StronglySorted_lookup; try assumption.
+    apply Sorted_StronglySorted; [intros ?; lia|].
+    apply small_list_limit_sorted.
+  }
+  unfold term in T.
+  rewrite <- (firstn_skipn (S (cond_pos i)) (small_list_limit i)).
+  rewrite lookup_total_app_l.
+  - apply elem_of_list_lookup_total_2.
+    unfold small_elements. rewrite length_take_le; lia.
+  - rewrite length_take_le; lia.
+Qed.

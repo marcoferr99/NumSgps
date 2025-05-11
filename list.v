@@ -35,10 +35,6 @@ Proof.
   apply take_S_r. now apply list_lookup_lookup_total_lt.
 Qed.
 
-Theorem Forall_repeat {T} (P : T -> Prop) x n :
-  P x -> Forall P (repeat x n).
-Proof. intros. induction n; constructor; assumption. Qed.
-
 
 (**************)
 (** * Sorting *)

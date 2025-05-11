@@ -12,6 +12,11 @@ Proof.
   lia.
 Qed.
 
+
+(*****************)
+(** * [find_gap] *)
+(*****************)
+
 (** Let [n] be the minimum natural number such that the list [l] begins with
     [[x, x+1, ..., x+(n-1), y]] and [y <> x+n].  Than the function [find_gap]
     returns [x+n]. *)

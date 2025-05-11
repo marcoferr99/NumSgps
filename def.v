@@ -89,14 +89,23 @@ Section numerical_semigroup.
     apply list_max_notin. lia.
   Qed.
 
-  Definition small_elements_set :=
-    {[x | x ∈ M ∧ x <= conductor]}.
+  Definition small_elements :=
+    filter (.∈ M) (seq 0 (S conductor)).
+
+  Theorem small_elements_spec :
+    forall x, x ∈ small_elements <->
+    x ∈ M ∧ x <= conductor.
+  Proof.
+    intros. unfold small_elements.
+    rewrite elem_of_list_filter, elem_of_seq.
+    split; intros []; (split; [assumption|lia]).
+  Qed.
 
 End numerical_semigroup.
 
 (** Equivalent condition for a numerical semigroup *)
 
-Theorem numerical_semigroup_equiv1 `{numerical_semigroup C M} :
+Theorem numerical_semigroup_equiv_1 `{numerical_semigroup C M} :
   submonoid M /\ exists2 x, x ∈ M & S x ∈ M.
 Proof.
   split; [tc_solve|].
@@ -110,7 +119,7 @@ Proof.
       unfold conductor; rewrite E in *; lia.
 Qed.
 
-Theorem numerical_semigroup_equiv2 `{submonoid C M} :
+Theorem numerical_semigroup_equiv_2 `{submonoid C M} :
   (forall x, Decision (x ∈ M)) ->
   (exists2 x, x ∈ M & S x ∈ M) ->
   Logic.inhabited (numerical_semigroup M).
