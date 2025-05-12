@@ -2,10 +2,6 @@ Require Export list_nat.
 From Coq Require Import Lia.
 
 
-(**********************)
-(** * List generation *)
-(**********************)
-
 Section nh.
   Variable (max : nat).
   Local Notation Forall_max := (Forall (ge max)).
@@ -13,7 +9,7 @@ Section nh.
 
 
   (*****************)
-  (** ** Next list *)
+  (** * Next list *)
   (*****************)
 
   (** Increase the first number in the list [l] that is less than [max] and set
@@ -104,7 +100,7 @@ Section nh.
 
 
   (*************************)
-  (** *** Inverse for next *)
+  (** ** Inverse for next *)
   (*************************)
 
   (** This function is not used for now *)
@@ -202,7 +198,7 @@ Section nh.
 
 
   (****************)
-  (** ** Nth list *)
+  (** * Nth list *)
   (****************)
 
   Fixpoint nh n :=
@@ -413,7 +409,8 @@ Section nh.
       }
       apply H; try assumption.
       - subst h. apply Forall_app.
-	split; [apply Forall_repeat; lia|].
+	rewrite repeat_replicate.
+	split; [apply Forall_replicate; lia|].
 	apply Forall_app. split.
 	+ subst md.
 	  destruct m; constructor; [lia | constructor].
@@ -637,7 +634,7 @@ Section nh.
 
 
   (***********************)
-  (** *** Inverse for nh *)
+  (** ** Inverse for nh *)
   (***********************)
 
   Definition binom n k :=

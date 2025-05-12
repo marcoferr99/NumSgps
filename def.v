@@ -22,12 +22,13 @@ Proof.
   - now apply ns_closed.
 Qed.
 
-Class numerical_semigroup `{Set_ nat C} (M : C) : Set := {
+Class numerical_semigroup `{Set_ nat C} (M : C) : Set := numerical_semigroup_intro {
   ns_submonoid :: submonoid M;
   gaps : list nat;
   sorted_gaps : Sorted lt gaps;
   elem_of_gaps x : x ∈ M <-> x ∉ gaps
 }.
+Arguments numerical_semigroup_intro {_ _ _ _ _ _ _ _ _}.
 
 Instance ns_Decision `{numerical_semigroup C M} x :
   Decision (x ∈ M).
@@ -103,28 +104,13 @@ Section numerical_semigroup.
 
 End numerical_semigroup.
 
-(** Equivalent condition for a numerical semigroup *)
+(** Equivalent definition for a numerical semigroup *)
 
-Theorem numerical_semigroup_equiv_1 `{numerical_semigroup C M} :
-  submonoid M /\ exists2 x, x ∈ M & S x ∈ M.
+Definition numerical_semigroup_2 `{submonoid C M} a :
+  (forall x, Decision (x ∈ M)) -> a ∈ M -> S a ∈ M ->
+  numerical_semigroup M.
 Proof.
-  split; [tc_solve|].
-  destruct gaps eqn : E.
-  + exists 0; apply elem_of_gaps; now rewrite E.
-  + assert (I : forall x, x > list_max gaps -> x ∈ M). {
-      intros x Hx.
-      apply elem_of_gaps. now apply list_max_notin.
-    }
-    exists conductor; apply I;
-      unfold conductor; rewrite E in *; lia.
-Qed.
-
-Theorem numerical_semigroup_equiv_2 `{submonoid C M} :
-  (forall x, Decision (x ∈ M)) ->
-  (exists2 x, x ∈ M & S x ∈ M) ->
-  Logic.inhabited (numerical_semigroup M).
-Proof.
-  intros D [a Aa AS]. constructor.
+  intros D Ma MS.
   set (m := (a - 1) * (a + 1)).
   assert (I : forall n, n >= m -> n ∈ M). {
     intros n Hn. destruct a.
@@ -146,15 +132,13 @@ Proof.
       rewrite N.
       apply ns_closed; now apply ns_mul_closed.
   }
-  set (l := merge_sort le (remove_dups ((filter (.∉ M) (seq 0 m))))).
-  apply Build_numerical_semigroup with (gaps := l).
-  - assumption.
-  - apply Sorted_le_lt. split.
-    + apply Sorted_merge_sort. intros ?. lia.
-    + unfold l. rewrite merge_sort_Permutation.
-      apply NoDup_remove_dups.
-  - intros x. subst l. rewrite merge_sort_Permutation.
-    rewrite elem_of_remove_dups.
+  set (l := filter (.∉ M) (seq 0 m)).
+  apply (numerical_semigroup_intro _ l).
+  - subst l. apply StronglySorted_Sorted.
+    apply StronglySorted_filter.
+    apply Sorted_StronglySorted; [intros ?; lia|].
+    apply Sorted_lt_seq.
+  - intros x. subst l.
     rewrite elem_of_list_filter.
     split; intros Hx; [intuition|].
     destruct (D x); try assumption.
@@ -163,43 +147,3 @@ Proof.
     + exfalso. auto.
     + apply elem_of_seq. lia.
 Qed.
-
-
-(*****************)
-(** * Generators *)
-(*****************)
-
-Section generators.
-  Context `{ElemOf nat C} (A : C).
-
-  Inductive generates : nat -> Prop :=
-    generates_intro r x l
-      (IA : (forall i, i < r -> x i ∈ A)) :
-      generates (sum_list_with (fun i => l i * x i) (seq 0 r)).
-
-  Theorem generates_eq a r x l :
-    (forall i, i < r -> x i ∈ A) ->
-    a = sum_list_with (fun i => l i * x i) (seq 0 r) ->
-    generates a.
-  Proof. now intros ? ->. Qed.
-
-End generators.
-
-Theorem generates_in `{numerical_semigroup C M} `{ElemOf nat D} (A : D) :
-  (forall x, x ∈ A -> x ∈ M) ->
-  forall a, generates A a -> a ∈ M.
-Proof.
-  intros I a G. inversion G. subst.
-  clear G. induction r; [apply ns_zero|].
-  rewrite seq_S. rewrite sum_list_with_app.
-  apply ns_closed.
-  - apply IHr. intros. apply IA. lia.
-  - simpl. rewrite add_0_r.
-    apply ns_mul_closed. apply I. apply IA. lia.
-Qed.
-
-(** Generator of a numerical semigroup *)
-
-Definition generator `{numerical_semigroup C M} `{ElemOf nat D} (A : D) :=
-  (forall x, x ∈ A -> x ∈ M) /\
-  forall a, a ∈ M -> generates A a.

@@ -126,7 +126,7 @@ Definition nat_gcd_l l := foldr gcd 0 l.
 Definition lim l := Z.to_nat (bez_neg (map Z.of_nat l)).
 
 Definition lim_ln l :=
-  match extgcd_l (fmap Z.of_nat l) with (d, c) =>
+  match extgcd_l (fmap Z.of_nat l) with (d, c) => intros x y Hx Hy.
   sum_list_with Z.to_nat c end.
 
 Theorem Nat2Z_gcd_l l :
@@ -398,39 +398,6 @@ Proof.
 	erewrite <- (list_lookup_total_correct _ _ x0); [|eassumption].
 	erewrite list_lookup_total_fmap; [|lia].
 	reflexivity.
-Qed.
-
-Theorem sum_list_with_eq {A} f g (l : list A) :
-  (forall x, x ∈ l -> f x = g x) ->
-  sum_list_with f l = sum_list_with g l.
-Proof.
-  intros. induction l; [reflexivity|].
-  simpl. rewrite IHl.
-  - f_equal. apply H. left.
-  - intros. apply H. now right.
-Qed.
-
-Theorem generates_add `{ElemOf nat C} (l : C) x y :
-  generates l x -> generates l y -> generates l (x + y).
-Proof.
-  intros Gx Gy. inversion Gx. inversion Gy.
-  set (a i := if (i <? r) then x0 i else x1 (i - r)).
-  set (k i := if (i <? r) then l0 i else l1 (i - r)).
-  apply (generates_eq _ _ (r + r0) a k).
-  - intros. unfold a. destruct (ltb_spec i r); [auto|].
-    + apply IA0. lia.
-  - rewrite seq_app, sum_list_with_app. f_equal.
-    + apply sum_list_with_eq.
-      intros. unfold k, a.
-      apply elem_of_seq in H2.
-      destruct (ltb_spec x2 r); lia.
-    + unfold k, a. clear.
-      induction r0; [reflexivity|].
-      repeat rewrite seq_S, sum_list_with_app.
-      rewrite IHr0. f_equal.
-      simpl. destruct (ltb_spec (r + r0) r).
-      * lia.
-      * replace (r + r0 - r) with r0; lia.
 Qed.
 
 Theorem generates_mul `{ElemOf nat C} (l : C) x y :

@@ -37,6 +37,9 @@ Section minimum.
   Definition set_min m :=
     m ∈ A /\ forall n, n ∈ A -> m <= n.
 
+  Definition set_max m :=
+    m ∈ A /\ forall n, n ∈ A -> n <= m.
+
   (** The minimum is unique *)
 
   Theorem set_min_unique n m :

@@ -286,6 +286,16 @@ Proof.
   simpl. rewrite sum_list_with_app. auto.
 Qed.
 
+Theorem sum_list_with_eq {A} f g (l : list A) :
+  (forall x, x ∈ l -> f x = g x) ->
+  sum_list_with f l = sum_list_with g l.
+Proof.
+  intros. induction l; [reflexivity|].
+  simpl. rewrite IHl.
+  - f_equal. apply H. left.
+  - intros. apply H. now right.
+Qed.
+
 
 (***************************)
 (** * Removing duplicates *)

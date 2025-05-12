@@ -1,15 +1,89 @@
 From Coq Require Import Euclid Lia.
 Require Export def list_alg.
-Require Import gcd.
  
 Generalizable No Variables.
-Generalizable Variables C M.
+Generalizable Variables C D M.
 
 
 Section generators.
-  Context `{numerical_semigroup C M}.
+  Context `{ElemOf nat D} (A : D).
+
+  Inductive lin_comb : nat -> Prop :=
+    lin_comb_intro r x l
+      (IA : (forall i, i < r -> x i ∈ A)) :
+      lin_comb (sum_list_with (fun i => l i * x i) (seq 0 r)).
+
+  Theorem lin_comb_eq a r x l :
+    (forall i, i < r -> x i ∈ A) ->
+    a = sum_list_with (fun i => l i * x i) (seq 0 r) ->
+    lin_comb a.
+  Proof. now intros ? ->. Qed.
+
+  Theorem lin_comb_add x y :
+    lin_comb x -> lin_comb y -> lin_comb (x + y).
+  Proof.
+    clear. intros Hx Hy.
+    inversion Hx as [rx ax kx Hax].
+    inversion Hy as [ry ay ky Hay].
+    set (a i := if (i <? rx) then ax i else ay (i - rx)).
+    set (k i := if (i <? rx) then kx i else ky (i - rx)).
+    apply (lin_comb_eq _ (rx + ry) a k).
+    - intros. unfold a. destruct (ltb_spec i rx); [auto|].
+      apply Hay. lia.
+    - rewrite seq_app, sum_list_with_app. f_equal.
+      + apply sum_list_with_eq.
+	intros z Hz. unfold k, a.
+	apply elem_of_seq in Hz.
+	destruct (ltb_spec z rx); lia.
+      + unfold k, a. clear.
+	induction ry; [reflexivity|].
+	repeat rewrite seq_S, sum_list_with_app.
+	rewrite IHry. f_equal.
+	simpl. destruct (ltb_spec (rx + ry) rx); [lia|].
+	replace (rx + ry - rx) with ry; lia.
+  Qed.
+
+  Definition generated := {[x | lin_comb x]}.
+
+  Instance submonoid_generated : submonoid generated.
+  Proof.
+    clear. constructor; unfold generated; set_unfold.
+    - apply (lin_comb_eq _ 0 id id); [lia|reflexivity].
+    - intros x y Hx Hy. now apply lin_comb_add.
+  Qed.
+
+  Theorem lin_comb_in `{submonoid C M} :
+    (forall x, x ∈ A -> x ∈ M) ->
+    forall a, lin_comb a -> a ∈ M.
+  Proof.
+    intros I a G. inversion G. subst.
+    clear G. induction r; [apply ns_zero|].
+    rewrite seq_S. rewrite sum_list_with_app.
+    apply ns_closed.
+    - apply IHr. intros. apply IA. lia.
+    - simpl. rewrite add_0_r.
+      apply ns_mul_closed. apply I. apply IA. lia.
+  Qed.
+
+  Definition generator `{ElemOf nat C} (M : C) :=
+    (forall x, x ∈ A -> x ∈ M) /\
+    forall a, a ∈ M -> lin_comb a.
+
+  Theorem generator_generated : generator generated.
+  Proof.
+    unfold generator, generated. set_unfold.
+    split; intros; [|assumption].
+    apply (lin_comb_eq _ 1 (fun _ => x) (fun _ => 1));
+      [auto|].
+    simpl. lia.
+  Qed.
+
+End generators.
+
+
+Section generators.
   Variables (gen : list nat).
-  Hypothesis (G : generator gen).
+  Local Notation M := (generated gen).
   Local Notation mlt := (list_min gen).
   Hypothesis (m0 : mlt <> 0).
   Local Notation nh := (nh (length gen - 1)).
@@ -48,6 +122,7 @@ Section generators.
 
   Theorem nhsum_in : forall n, nhsum n ∈ M.
   Proof.
+    generalize (submonoid_generated gen). intros SM.
     intros. unfold nhsum.
     generalize (nh_Forall_gt n). intros F.
     remember (nh n) as ls eqn : E.
@@ -58,15 +133,16 @@ Section generators.
       subst. simpl. apply ns_zero.
     + intros. destruct ls; try discriminate.
       inversion F. subst. simpl. apply ns_closed.
-      * destruct G as [G1 _]. apply G.
+      * destruct (generator_generated gen) as [G _].
+	apply G.
 	apply elem_of_list_lookup_total_2. lia.
       * apply IH; auto.
   Qed.
 
   Theorem nhsum_all a : a ∈ M -> exists n, nhsum n = a.
   Proof.
-    intros Aa. destruct G as [_ G2].
-    destruct (G2 a Aa) as [r x k Hr].
+    intros Aa. destruct (generator_generated gen) as [_ G].
+    destruct (G a Aa) as [r x k Hr].
     set (l := flat_map (fun i => repeat (lookup_inv gen (x i)) (k i)) (seq 0 r)).
     set (ol := reverse (merge_sort le l)).
     destruct (nh_all (length gen - 1) ol) as [n Hn].
@@ -76,7 +152,8 @@ Section generators.
       rewrite merge_sort_Permutation.
       unfold l. apply Forall_flat_map.
       apply Forall_forall. intros y Hy.
-      apply Forall_repeat. apply lookup_inv_lt. apply Hr.
+      rewrite repeat_replicate. apply Forall_replicate.
+      apply lookup_inv_lt. apply Hr.
       apply elem_of_seq in Hy. lia.
     - subst ol. apply Sorted_reverse.
       apply Sorted_merge_sort. intros ?. lia.
@@ -142,7 +219,7 @@ Section generators.
     unfold small_list.
     rewrite <- sorted_nodup_in, merge_sort_Permutation.
     intros Ha. induction i; [inversion Ha|].
-    simpl in *. set_unfold. destruct Ha; [|auto].
+    simpl in *. set_unfold in Ha. destruct Ha; [|auto].
     subst. apply nhsum_in.
   Qed.
 
@@ -199,6 +276,7 @@ Section generators.
   Theorem cond_pred_notin i :
     term i -> cond i <> 0 -> (cond i - 1) ∉ M.
   Proof.
+    generalize (submonoid_generated gen). intros SM.
     intros T N L.
     generalize (Sorted_lt_small_list_limit i). intros SS.
     apply Sorted_StronglySorted in SS; [|intros ?; lia].
@@ -261,12 +339,13 @@ Section generators.
   Theorem cond_ge_in i : term i ->
     forall a, cond i <= a -> a ∈ M.
   Proof.
+    generalize (submonoid_generated gen). intros SM.
     intros T a L.
     replace a with (a - cond i + cond i); [|lia].
     rewrite (Div0.div_mod (a - cond i) (list_min gen)).
     rewrite <- add_assoc. apply ns_closed.
     + rewrite mul_comm. apply ns_mul_closed.
-      destruct G as [G1 _]. apply G1.
+      destruct (generator_generated gen) as [G _]. apply G.
       apply list_min_in. apply gen_neq.
     + apply (find_seq_seq (small_list_limit i) (list_min gen)) in T.
       apply small_list_limit_in with (n := i);
@@ -281,32 +360,20 @@ Section generators.
       apply elem_of_seq. lia.
   Qed.
 
-  Theorem cond_conductor i : term i -> cond i = conductor.
+  Theorem cond_max i : term i ->
+    (1 ∈ M ∧ cond i = 0) ∨ (set_max ({[x | x ∉ M]}) (cond i - 1)).
   Proof.
-    intros T. unfold conductor.
-    destruct gaps eqn : Eg.
-    - destruct (eq_dec (cond i) 0) as [|N]; [assumption|].
-      apply cond_pred_notin in N; [|assumption].
-      exfalso. apply N. apply elem_of_gaps. now rewrite Eg.
-    - rewrite <- Eg. destruct (cond i) as [|c] eqn : E.
-      + absurd (n ∈ gaps).
-	* apply elem_of_gaps.
-	  eapply cond_ge_in; [eassumption|]. lia.
-	* rewrite Eg. left.
-      + f_equal.
-	apply le_antisymm.
-	* destruct (le_gt_cases c (list_max gaps));
-	    [assumption|].
-	  exfalso. eapply cond_pred_notin;
-	    [eassumption|lia|].
-	  apply conductor_le_in.
-	  unfold conductor. rewrite Eg. rewrite <- Eg. lia.
-	* apply list_max_le. apply Forall_forall.
-	  intros x Hx.
-	  apply dec_stable. intros N.
-	  apply elem_of_gaps' in Hx. apply Hx.
-	  eapply cond_ge_in; [eassumption|].
-	  lia.
+    intros T.
+    destruct (cond i) eqn : E.
+    - left. split; [|reflexivity].
+      eapply cond_ge_in; [eassumption|]. lia.
+    - right. unfold set_max. split.
+      + rewrite elem_of_PropSet, <- E.
+	apply cond_pred_notin; [assumption|lia].
+      + intros m Hm. rewrite elem_of_PropSet in Hm.
+	destruct (le_gt_cases m (S n - 1)); [assumption|].
+	exfalso. apply Hm.
+	eapply cond_ge_in; [eassumption|]. lia.
   Qed.
 
   Definition small_elements i :=
@@ -382,22 +449,19 @@ Section generators.
     eapply Sorted_app_l. eassumption.
   Qed.
 
-  Theorem small_elements_small_elements_set i : term i ->
+  Theorem small_elements_spec i : term i ->
     forall x, x ∈ small_elements i <->
-    x ∈ small_elements_set.
+    x ∈ M ∧ x <= cond i.
   Proof.
     intros T x.
     rewrite small_elements_alt; [|assumption].
     rewrite elem_of_list_filter.
     split; intros [X1 X2].
-    - split; [eapply small_list_limit_in; eassumption|].
-      erewrite <- cond_conductor; eassumption.
-    - rewrite cond_conductor; [|assumption].
-      split; [assumption|].
+    - split; [eapply small_list_limit_in|]; eassumption.
+    - split; [assumption|].
       apply small_list_limit_all; [assumption|].
-      apply Exists_exists. exists conductor.
+      apply Exists_exists. exists (cond i).
       split; [|assumption].
-      erewrite <- cond_conductor; [|eassumption].
       now apply elem_of_list_lookup_total_2.
   Qed.
 
@@ -407,38 +471,37 @@ Section generators.
   Definition gaps_alg i :=
     filter (.∉ (small_elements i)) (seq 0 (cond i)).
 
-  Theorem gaps_alg_correct i : term i -> gaps_alg i = gaps.
+  Theorem gaps_alg_correct i : term i ->
+    forall x, x ∉ gaps_alg i <-> x ∈ M.
   Proof.
-    intros T. apply Sorted_lt_eq.
-    - apply StronglySorted_Sorted, StronglySorted_filter.
-      apply Sorted_StronglySorted; [intros ?; lia|].
-      apply Sorted_lt_seq.
-    - apply sorted_gaps.
-    - intros x. unfold gaps_alg.
-      rewrite elem_of_list_filter, elem_of_gaps'.
-      split.
-      + intros [Sx Hx] N.
-	destruct (le_gt_cases x conductor).
-	* apply Sx.
-	  apply small_elements_small_elements_set;
-	    [assumption|].
-	  unfold small_elements_set. set_unfold. auto.
-	* apply elem_of_seq in Hx.
-	  erewrite <- cond_conductor in H7; [|eassumption].
-	  lia.
-      + intros Hx. split.
-	* intros N.
-	  apply small_elements_small_elements_set in N;
-	    [|assumption].
-	  now destruct N.
-	* apply elem_of_seq.
-	  rewrite cond_conductor; [|assumption].
-	  destruct (le_gt_cases conductor x); [|lia].
-	  exfalso. apply Hx. now apply conductor_le_in.
+    intros T x. unfold gaps_alg.
+    rewrite elem_of_list_filter.
+    split.
+    - intros Hx.
+      apply not_and_r in Hx. destruct Hx.
+      + apply dec_stable in H.
+	apply small_elements_spec in H; intuition.
+      + rewrite elem_of_seq in H.
+	eapply cond_ge_in; [eassumption|lia].
+    - intros Mx [Sm Sc]. rewrite elem_of_seq in Sc.
+      rewrite small_elements_spec in Sm; [|assumption].
+      apply not_and_r in Sm. destruct Sm; [contradiction|].
+      lia.
   Qed.
 
+  Definition gen_numerical_semigroup i : term i ->
+    numerical_semigroup M.
+  Proof.
+    generalize (submonoid_generated gen). intros SM.
+    intros T.
+    apply (numerical_semigroup_intro _ (gaps_alg i)).
+    - apply StronglySorted_Sorted, StronglySorted_filter.
+      apply Sorted_StronglySorted; [intros?; lia|].
+      apply Sorted_lt_seq.
+    - intros x. split; apply gaps_alg_correct; assumption.
+  Qed.
 
-  Definition term_n := nhinv (length gen - 1) (replicate ((lim gen / mlt) + 1) (lookup_inv gen mlt)).
+  (*Definition term_n := nhinv (length gen - 1) (replicate ((lim gen / mlt) + 1) (lookup_inv gen mlt)).
 
   Theorem unfinished x :
     sum_list_with (gen !!!.) (replicate ((x / mlt) + 1) (lookup_inv gen mlt)) = ((x / mlt) + 1) * mlt.
@@ -451,11 +514,11 @@ Section generators.
   Qed.
 
   Definition small_elements_term := small_elements term_n.
-  Definition gaps_alg_term := gaps_alg term_n.
+  Definition gaps_alg_term := gaps_alg term_n.*)
 
 End generators.
 
 
-Compute term [5;9;21] (term_n [5;9;21]).
-Compute small_elements_term [5;9;21].
-Compute gaps_alg_term [5;9;21].
+Compute term [5;9;21] 60.
+Compute small_elements [5;9;21] 60.
+Compute gaps_alg [5;9;21] 60.
