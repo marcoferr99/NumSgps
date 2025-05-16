@@ -37,23 +37,14 @@ Section nh.
     repeat (S m) (S n) ++ l.
   Proof.
     intros Hm.
-    replace (repeat (S m) (S n) ++ l) with (repeat (S m) n ++ next (m :: l)). 2:{
-      replace (S n) with (n + 1); try lia.
-      rewrite repeat_app. simpl.
-      destruct (ltb_spec m max); try lia.
-      rewrite <- app_assoc. reflexivity.
-    }
-    induction n as [ | n IH]; try reflexivity.
-    remember (m :: l) as ml. simpl.
-    destruct (ltb_spec max max); try lia. rewrite IH.
-    remember (repeat (S m) n ++ next ml) as t eqn : Eh.
-    destruct t as [ | h t].
-    - exfalso. eapply next_not_nil. eassumption.
-    - f_equal. destruct n; simpl in *.
-      + subst. simpl in IH.
-	destruct (ltb_spec m max); try lia.
-	injection IH. auto.
-      + injection Eh. auto.
+    induction n.
+    - simpl. destruct (ltb_spec m max); [reflexivity|lia].
+    - simpl. destruct (ltb_spec max max); [lia|].
+      rewrite IHn.
+      destruct (repeat (S m) (S n) ++ l) eqn : E.
+      + exfalso. eapply next_not_nil. eassumption.
+      + rewrite <- E. f_equal.
+	simpl in E. now injection E.
   Qed.
 
   Theorem next_Forall l :

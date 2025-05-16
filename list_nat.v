@@ -1,5 +1,5 @@
 From stdpp Require Export list_numbers sets sorting.
-Require Export list.
+Require Export list nat.
 Export Nat.
 
 
@@ -461,4 +461,98 @@ Proof.
   - rewrite E in F1. rewrite <- F1.
     rewrite lookup_total_take; [|lia].
     subst s. reflexivity.
+Qed.
+
+
+(******************)
+(** * Find modulo *)
+(******************)
+
+Definition find_mod n c a l :=
+  match list_find (fun x => x mod n = a mod n) l with
+  | None => mod_ge n a c
+  | Some (_, x) => x
+  end.
+
+Theorem find_mod_mod n c a l :
+  (find_mod n c a l) mod n = a mod n.
+Proof.
+  unfold find_mod.
+  destruct (list_find (λ x, x mod n = a mod n)) eqn : E.
+  - destruct p as [p x].
+    apply list_find_Some in E. intuition.
+  - apply mod_ge_mod.
+Qed.
+
+Theorem find_mod_min n c a l x :
+  Sorted lt l -> n <> 0 -> x ∈ l ->
+  x mod n = a mod n -> find_mod n c a l <= x.
+Proof.
+  intros SS n0 Lx I.
+  unfold find_mod.
+  destruct (list_find (λ x, x mod n = a mod n)) eqn : E.
+  - destruct p as [p y].
+    apply list_find_Some in E.
+    destruct (le_gt_cases y x); [assumption|].
+    apply elem_of_list_lookup_1 in Lx as [i Hi].
+    exfalso. destruct E as (Hy & _ & E). eapply E.
+    + apply Hi.
+    + assert (i <= p). {
+	apply list_lookup_alt in Hi as [Li Hi].
+	apply list_lookup_alt in Hy as [Lp Hp].
+	apply Sorted_StronglySorted in SS; [|intros ?; lia].
+	eapply StronglySorted_lookup_2; try eassumption.
+	rewrite Hi, Hp. lia.
+      }
+      destruct (eq_dec i p); [|lia].
+      subst.
+      assert (x = y); [|lia].
+      rewrite Hi in Hy. now injection Hy.
+    + assumption.
+  - apply list_find_None in E.
+    eapply Forall_forall in E; [|eassumption].
+    contradiction.
+Qed.
+
+Theorem find_mod_min_2 n c a l x :
+  Sorted lt l -> Forall (ge c) l ->
+  n <> 0 -> x > c -> x mod n = a mod n ->
+  find_mod n c a l <= x.
+Proof.
+  intros SS F n0 Lx I.
+  unfold find_mod.
+  destruct (list_find (λ x, x mod n = a mod n)) eqn : E.
+  - destruct p as [p y].
+    apply list_find_Some in E as [E _].
+    apply elem_of_list_lookup_2 in E.
+    eapply Forall_forall in F; [|eassumption].
+    lia.
+  - unfold mod_ge. rewrite <- I.
+    destruct (leb_spec c (c - c mod n + x mod n)).
+    + apply mod_mod_le; [assumption|lia].
+    + replace (c - c mod n + x mod n + n) with (c - c mod n + n + x mod n); [|lia].
+      assert (x mod n < c mod n); [lia|].
+      assert (c - c mod n + n <= x - x mod n); [|lia].
+      destruct (mod_divide_2 n (x - x mod n) (c - c mod n)).
+      * lia.
+      * rewrite (div_mod_eq c n) at 1.
+	rewrite <- add_sub_assoc, sub_diag, add_0_r; [|lia].
+	rewrite mul_comm, Div0.mod_mul.
+	rewrite (div_mod_eq x n) at 1.
+	rewrite <- add_sub_assoc, sub_diag, add_0_r; [|lia].
+	rewrite mul_comm, Div0.mod_mul.
+	reflexivity.
+      * destruct x0; simpl in *; lia.
+Qed.
+
+Theorem find_mod_in n c a l : n <> 0 ->
+  find_mod n c a l ∈ l \/ find_mod n c a l >= c.
+Proof.
+  intros n0.
+  unfold find_mod.
+  destruct (list_find (λ x, x mod n = a mod n)) eqn : E.
+  - destruct p as [p y].
+    apply list_find_Some in E as [E _].
+    left. eapply elem_of_list_lookup_2. eassumption.
+  - right. now apply mod_ge_ge.
 Qed.

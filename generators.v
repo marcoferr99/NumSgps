@@ -65,20 +65,21 @@ Section generators.
       apply ns_mul_closed. apply I. apply IA. lia.
   Qed.
 
-  Definition generator `{ElemOf nat C} (M : C) :=
-    (forall x, x ∈ A -> x ∈ M) /\
-    forall a, a ∈ M -> lin_comb a.
-
-  Theorem generator_generated : generator generated.
-  Proof.
-    unfold generator, generated. set_unfold.
-    split; intros; [|assumption].
-    apply (lin_comb_eq _ 1 (fun _ => x) (fun _ => 1));
-      [auto|].
-    simpl. lia.
-  Qed.
-
 End generators.
+
+Definition generator `{ElemOf nat C} (M : C) `{ElemOf nat D} (A : D) :=
+  (forall x, x ∈ A -> x ∈ M) /\
+  forall a, a ∈ M -> lin_comb A a.
+
+Theorem generator_generated `{ElemOf nat D} (A : D) :
+  generator (generated A) A.
+Proof.
+  unfold generator, generated. set_unfold.
+  split; intros; [|assumption].
+  apply (lin_comb_eq _ _ 1 (fun _ => x) (fun _ => 1));
+    [auto|].
+  simpl. lia.
+Qed.
 
 
 Section generators.
@@ -376,14 +377,14 @@ Section generators.
 	eapply cond_ge_in; [eassumption|]. lia.
   Qed.
 
-  Definition small_elements i :=
+  Definition small_els i :=
     take (S (cond_pos i)) (small_list_limit i).
 
-  Theorem small_elements_alt i : term i ->
-    small_elements i =
+  Theorem small_els_alt i : term i ->
+    small_els i =
     filter (fun x => x <= cond i) (small_list_limit i).
   Proof.
-    intros T. unfold small_elements. apply Sorted_lt_eq.
+    intros T. unfold small_els. apply Sorted_lt_eq.
     - eapply Sorted_app_l.
       rewrite take_drop. apply Sorted_lt_small_list_limit.
     - apply StronglySorted_Sorted.
@@ -427,34 +428,34 @@ Section generators.
 	  fold (cond i). lia.
   Qed.
 
-  Theorem small_list_limit_small_elements i :
+  Theorem small_list_limit_small_els i :
     small_list_limit i =
-    small_elements i ++ drop (S (cond_pos i)) (small_list_limit i).
+    small_els i ++ drop (S (cond_pos i)) (small_list_limit i).
   Proof. symmetry. apply firstn_skipn. Qed.
 
-  Theorem small_elements_in i a :
-    a ∈ small_elements i -> a ∈ M.
+  Theorem small_els_in i a :
+    a ∈ small_els i -> a ∈ M.
   Proof.
     intros I. apply (small_list_limit_in i).
-    rewrite small_list_limit_small_elements.
+    rewrite small_list_limit_small_els.
     apply elem_of_app. left. assumption.
   Qed.
 
-  Theorem Sorted_lt_small_elements i :
-    Sorted lt (small_elements i).
+  Theorem Sorted_lt_small_els i :
+    Sorted lt (small_els i).
   Proof.
     assert (SS := Sorted_lt_small_list_limit i).
-    unfold small_elements.
+    unfold small_els.
     rewrite <- (take_drop (S (cond_pos i))) in SS.
     eapply Sorted_app_l. eassumption.
   Qed.
 
-  Theorem small_elements_spec i : term i ->
-    forall x, x ∈ small_elements i <->
+  Theorem small_els_spec i : term i ->
+    forall x, x ∈ small_els i <->
     x ∈ M ∧ x <= cond i.
   Proof.
     intros T x.
-    rewrite small_elements_alt; [|assumption].
+    rewrite small_els_alt; [|assumption].
     rewrite elem_of_list_filter.
     split; intros [X1 X2].
     - split; [eapply small_list_limit_in|]; eassumption.
@@ -465,11 +466,11 @@ Section generators.
       now apply elem_of_list_lookup_total_2.
   Qed.
 
-  Definition small_elements_opt i :=
-    if decide (term i) then Some (small_elements i) else None.
+  Definition small_els_opt i :=
+    if decide (term i) then Some (small_els i) else None.
 
   Definition gaps_alg i :=
-    filter (.∉ (small_elements i)) (seq 0 (cond i)).
+    filter (.∉ (small_els i)) (seq 0 (cond i)).
 
   Theorem gaps_alg_correct i : term i ->
     forall x, x ∉ gaps_alg i <-> x ∈ M.
@@ -480,11 +481,11 @@ Section generators.
     - intros Hx.
       apply not_and_r in Hx. destruct Hx.
       + apply dec_stable in H.
-	apply small_elements_spec in H; intuition.
+	apply small_els_spec in H; intuition.
       + rewrite elem_of_seq in H.
 	eapply cond_ge_in; [eassumption|lia].
     - intros Mx [Sm Sc]. rewrite elem_of_seq in Sc.
-      rewrite small_elements_spec in Sm; [|assumption].
+      rewrite small_els_spec in Sm; [|assumption].
       apply not_and_r in Sm. destruct Sm; [contradiction|].
       lia.
   Qed.
@@ -520,5 +521,5 @@ End generators.
 
 
 Compute term [5;9;21] 60.
-Compute small_elements [5;9;21] 60.
+Compute small_els [5;9;21] 60.
 Compute gaps_alg [5;9;21] 60.

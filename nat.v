@@ -25,13 +25,84 @@ Proof.
   rewrite C. now rewrite Z.sub_diag.
 Qed.
 
+Theorem mod_mod_le n x y :
+  n <> 0 -> x > y -> y - y mod n + x mod n <= x.
+Proof.
+  intros n0 L.
+  rewrite (Div0.div_mod x n) at 2.
+  rewrite (Div0.div_mod y n) at 1.
+  generalize (Div0.div_le_mono y x n). intros Lm.
+  apply add_le_mono; [|lia].
+  rewrite <- add_sub_assoc; [|lia].
+  rewrite sub_diag.
+  remember (y / n) as b eqn : E. clear E.
+  remember (x / n) as a eqn : E. clear E.
+  induction n; lia.
+Qed.
 
-(***************)
-(** ** Minimum *)
-(***************)
+Theorem mod_divide_2 n x y :
+  x > y -> x mod n = y mod n -> exists q, x = q * n + y.
+Proof.
+  intros L M. symmetry in M.
+  apply mod_divide in M. destruct M as [q M].
+  exists q. lia.
+Qed.
+
+(** Compute the smallest number that is greater than or
+    equal to [x] and is congruent to [a] modulo [n]. *)
+
+Definition mod_ge n a x :=
+  let r := x - x mod n + a mod n in
+  if x <=? r then r else r + n.
+
+Theorem mod_ge_mod n a x : (mod_ge n a x) mod n = a mod n.
+Proof.
+  unfold mod_ge.
+  assert (E : (x - x mod n) mod n = 0). {
+    generalize (Div0.div_mod x n). intros D.
+    replace (x - x mod n) with (n * (x / n)); try lia.
+    rewrite mul_comm. apply Div0.mod_mul.
+  }
+  destruct (leb_spec x (x - x mod n + a mod n)).
+  - rewrite <- Div0.add_mod_idemp_l. rewrite E.
+    simpl. apply Div0.mod_mod.
+  - rewrite <- add_assoc. rewrite <- Div0.add_mod_idemp_l.
+    rewrite E. simpl.
+    rewrite <- (Div0.add_mod_idemp_r _ n).
+    rewrite Div0.mod_same. rewrite add_0_r.
+    apply Div0.mod_mod.
+Qed.
+
+Theorem mod_ge_ge n a x : n <> 0 -> x <= mod_ge n a x.
+Proof.
+  intros n0. unfold mod_ge.
+  destruct (leb_spec x (x - x mod n + a mod n)); try lia.
+  apply (mod_upper_bound a) in n0 as U.
+  apply (mod_upper_bound x) in n0. lia.
+Qed.
+
+Theorem mod_ge_lt n a x : n <> 0 -> mod_ge n a x < x + n.
+Proof.
+  intros n0. unfold mod_ge.
+  destruct (leb_spec x (x - x mod n + a mod n)); try lia.
+  apply (mod_upper_bound a) in n0 as U.
+  apply (mod_upper_bound x) in n0. lia.
+Qed.
+
+Theorem mod_mod_ge n a x :
+  a mod n = x mod n -> mod_ge n a x = x.
+Proof.
+  intros I. unfold mod_ge.
+  destruct (leb_spec x (x - x mod n + a mod n)); [|lia].
+  generalize (Div0.mod_le x n). intros D. lia.
+Qed.
+
+
+(**************)
+(** * Minimum *)
+(**************)
 
 Section minimum.
-
   Context `{ElemOf nat C} (A : C).
 
   Definition set_min m :=
