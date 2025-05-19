@@ -324,6 +324,7 @@ Section apery.
       + simpl. lia.
   Qed.
 
+
   (**********************************)
   (** Apery alternative computation *)
   (**********************************)
@@ -336,7 +337,7 @@ Section apery.
 
   Definition apery_2 := apery_2_aux n small_elements.
 
-  Theorem apery_alg_correct :
+  Theorem apery_2_correct :
     n <> 0 -> n ∈ M -> forall x, x ∈ apery_2 <-> x ∈ apery.
   Proof.
     intros n0 Mn x.

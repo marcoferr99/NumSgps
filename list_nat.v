@@ -3,12 +3,21 @@ Require Export list nat.
 Export Nat.
 
 
+Definition list_max_lower_bound l : l <> [] ->
+  lower_bound ge (list_max l) l.
+Proof.
+  intros l0 x Hx.
+  destruct (le_gt_cases x (list_max l)) as [|L];
+    [assumption|].
+  apply list_max_lt in L; [|assumption].
+  eapply Forall_forall in L; [|eassumption]. lia.
+Qed.
+
 Theorem list_max_notin l x : x > list_max l -> x ∉ l.
 Proof.
-  intros Hx. destruct l eqn : E; [easy|].
-  rewrite <- E in *.
-  apply list_max_lt in Hx; [|now rewrite E].
-  intros N. eapply Forall_forall in Hx; try eassumption.
+  intros Hx.
+  destruct (decide (l = [])); [subst; easy|].
+  intros N. apply list_max_lower_bound in N; [|assumption].
   lia.
 Qed.
 
@@ -118,15 +127,14 @@ Qed.
 
 Theorem Sorted_lt_unique l :
   Sorted lt l -> forall i j, i < length l ->
-  j < length l -> l !!! i = l !!! j -> i = j.
+  j < length l -> l !! i = l !! j -> i = j.
 Proof.
-  intros S i j Li Lj H.
-  apply Sorted_StronglySorted in S; [|intros ?; lia].
-  apply le_antisymm.
-  - eapply StronglySorted_lookup_2; try eassumption.
-    rewrite H. lia.
-  - eapply StronglySorted_lookup_2; try eassumption.
-    rewrite H. lia.
+  intros S i j Li Lj E.
+  apply (Sorted_StronglySorted _) in S.
+  apply lookup_lt_is_Some_2 in Li, Lj.
+  destruct Li, Lj.
+  eapply (StronglySorted_unique_index lt _); try eassumption.
+  congruence.
 Qed.
 
 Theorem Sorted_lt_eq l m : Sorted lt l -> Sorted lt m ->
@@ -498,11 +506,11 @@ Proof.
     exfalso. destruct E as (Hy & _ & E). eapply E.
     + apply Hi.
     + assert (i <= p). {
-	apply list_lookup_alt in Hi as [Li Hi].
-	apply list_lookup_alt in Hy as [Lp Hp].
-	apply Sorted_StronglySorted in SS; [|intros ?; lia].
-	eapply StronglySorted_lookup_2; try eassumption.
-	rewrite Hi, Hp. lia.
+	apply (Sorted_StronglySorted _) in SS.
+	destruct (le_gt_cases i p) as [|L]; [assumption|].
+	eapply (StronglySorted_lookup _ _ SS) in L;
+	  try eassumption.
+	lia.
       }
       destruct (eq_dec i p); [|lia].
       subst.

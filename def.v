@@ -57,7 +57,7 @@ Section numerical_semigroup.
   Definition multiplicity := find_gap 1 gaps.
 
   Theorem multiplicity_min :
-    set_min (M ∖ {[0]}) multiplicity.
+    minimum le multiplicity (M ∖ {[0]}).
   Proof.
     split.
     - apply elem_of_difference. split.

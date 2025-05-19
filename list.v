@@ -35,6 +35,39 @@ Proof.
   apply take_S_r. now apply list_lookup_lookup_total_lt.
 Qed.
 
+Theorem filter_all {A} P `{forall x, Decision (P x)} (l : list A) :
+  Forall P l -> filter P l = l.
+Proof.
+  intros F. induction l; [reflexivity|].
+  rewrite filter_cons. destruct (decide (P a)).
+  - f_equal. apply IHl. now inversion F.
+  - inversion F. contradiction.
+Qed.
+
+Theorem filter_none {A} P `{forall x, Decision (P x)} (l : list A) :
+  Forall (fun x => ~ P x) l -> filter P l = [].
+Proof.
+  intros F. induction l; [reflexivity|].
+  rewrite filter_cons. destruct (decide (P a)).
+  - inversion F. contradiction.
+  - apply IHl. now inversion F.
+Qed.
+
+Theorem elem_of_drop {A} (x : A) n l :
+  x ∈ drop n l <-> exists i, l !! i = Some x ∧ n <= i.
+Proof.
+  split.
+  - intros Hx.
+    apply elem_of_list_lookup_1 in Hx as [i Hi].
+    rewrite lookup_drop in Hi.
+    exists (n + i). split; [assumption|]. lia.
+  - intros [i [Si Hi]].
+    eapply elem_of_list_lookup_2.
+    rewrite lookup_drop.
+    replace i with (n + (i - n)) in Si; [|lia].
+    eassumption.
+Qed.
+
 
 (**************)
 (** * Sorting *)
@@ -96,24 +129,70 @@ Proof.
   apply E. now inversion Hd.
 Qed.
 
-Theorem StronglySorted_lookup {T} `{Inhabited T} P (l : list T) :
+Theorem StronglySorted_lookup {T} P (l : list T) :
   StronglySorted P l ->
-  forall n m, n < length l -> m < length l ->
-  n < m -> P (l !!! n) (l !!! m).
+  forall i j x y, l !! i = Some x -> l !! j = Some y ->
+  i < j -> P x y.
 Proof.
-  induction l; intros SR n m Ln Lm L; [simpl in Ln; lia|].
-  inversion SR. subst. destruct m, n; simpl; try lia.
-  - apply Forall_lookup_total; [assumption|].
-    simpl in Lm. lia.
-  - simpl in Ln, Lm. apply IHl; try assumption; lia.
+  induction l; intros SR i j x y Hx Hy L.
+  - rewrite lookup_nil in Hx. discriminate.
+  - inversion SR. subst.
+    destruct i, j; simpl in *; try lia.
+    + injection Hx as Hx. subst.
+      eapply Forall_lookup_1; eassumption.
+    + eapply IHl; try eassumption. lia.
 Qed.
 
-Theorem StronglySorted_lookup_2 {T} `{Inhabited T} P (l : list T) :
+Theorem StronglySorted_lookup_refl {T} P `{!Reflexive P} (l : list T) :
   StronglySorted P l ->
-  forall n m, n < length l -> m < length l ->
-  ~ P (l !!! n) (l !!! m) -> m <= n.
+  forall i j x y, l !! i = Some x -> l !! j = Some y ->
+  i <= j -> P x y.
 Proof.
-  intros SR n m Ln Lm C.
-  destruct (Nat.le_gt_cases m n); try assumption.
-  exfalso. apply C. now apply StronglySorted_lookup.
+  intros SR i j x y Hx Hy L.
+  destruct (decide (i = j)).
+  - subst. rewrite Hx in Hy.
+    injection Hy. intros ->. reflexivity.
+  - eapply StronglySorted_lookup; try eassumption. lia.
+Qed.
+
+Theorem StronglySorted_unique_index {T} R `{!Irreflexive R} (l : list T) :
+  StronglySorted R l ->
+  forall i j x, l !! i = Some x -> l !! j = Some x ->
+  i = j.
+Proof.
+  intros SS i j x Hi Hj.
+  apply dec_stable. intros N.
+  assert (O : i < j ∨ j < i); [lia|].
+  destruct O as [O|O]; eapply StronglySorted_lookup in O; try eassumption; apply irreflexivity in O; assumption.
+Qed.
+
+Instance Sorted_equiv_proper {A} l :
+  Proper (Normalizes A ==> iff) (fun R => Sorted R l).
+Proof.
+  intros P Q N.
+  induction l; split; intros H; constructor; inversion H;
+    try (now apply IHl); subst; destruct l; constructor.
+  - apply N. now inversion H3.
+  - apply N. now inversion H3.
+Qed.
+
+Theorem Sorted_app {T} R `{!Transitive R} (l : list T) x y :
+  R x y -> Sorted R (l ++ [x]) -> Sorted R (l ++ [y]).
+Proof.
+  intros Rxy Sx.
+  rewrite <- reverse_involutive.
+  eapply Sorted_equiv_proper; [apply flip_atom|].
+  apply Sorted_reverse. apply Sorted_reverse in Sx.
+  rewrite reverse_app in *. simpl in *.
+  inversion Sx. subst. constructor; [assumption|].
+  destruct (reverse l); [constructor|].
+  inversion H2. constructor. simpl in *.
+  eapply transitivity; eassumption.
+Qed.
+
+Theorem Sorted_replicate {T} R `{!Reflexive R} n (x : T) :
+  Sorted R (replicate n x).
+Proof.
+  induction n; simpl; constructor; [assumption|].
+  destruct n; constructor. reflexivity.
 Qed.

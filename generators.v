@@ -87,7 +87,7 @@ Section generators.
   Local Notation M := (generated gen).
   Local Notation mlt := (list_min gen).
   Hypothesis (m0 : mlt <> 0).
-  Local Notation nh := (nh (length gen - 1)).
+  Local Notation lgen := (lgen (length gen - 1)).
 
   Theorem gen_neq : gen <> [].
   Proof. intros ?. subst. contradiction. Qed.
@@ -97,23 +97,24 @@ Section generators.
     intros ?. now apply gen_neq, length_zero_iff_nil.
   Qed.
 
-  Theorem nh_Forall_gt n : Forall (gt (length gen)) (nh n).
+  Theorem Forall_gt_lgen n :
+    Forall (gt (length gen)) (lgen n).
   Proof.
     apply Forall_forall. intros x Hx.
-    generalize (nh_Forall (length gen - 1) n). intros F.
+    generalize (ge_max_lgen (length gen - 1) n). intros F.
     eapply Forall_forall in F; [|eassumption].
     generalize length_gen_neq. lia.
   Qed.
 
-  Definition nhsum n := sum_list_with (gen !!!.) (nh n).
+  Definition mgen n := sum_list_with (gen !!!.) (lgen n).
 
-  Definition nth_limit n := length (nh n) * mlt.
+  Definition nth_limit n := length (lgen n) * mlt.
 
-  Theorem nhsum_le n : nhsum n >= nth_limit n.
+  Theorem nth_limit_le_mgen n : nth_limit n <= mgen n.
   Proof.
-    unfold nth_limit, nhsum.
-    generalize (nh_Forall_gt n). intros F.
-    remember (nh n) as h eqn : E. clear E.
+    unfold nth_limit, mgen.
+    generalize (Forall_gt_lgen n). intros F.
+    remember (lgen n) as h eqn : E. clear E.
     induction h; simpl; try lia.
     inversion F. subst. eapply le_trans.
     - apply add_le_mono_l. apply IHh. assumption.
@@ -121,12 +122,12 @@ Section generators.
       now apply elem_of_list_lookup_total_2.
   Qed.
 
-  Theorem nhsum_in : forall n, nhsum n ∈ M.
+  Theorem mgen_correct : forall n, mgen n ∈ M.
   Proof.
     generalize (submonoid_generated gen). intros SM.
-    intros. unfold nhsum.
-    generalize (nh_Forall_gt n). intros F.
-    remember (nh n) as ls eqn : E.
+    intros. unfold mgen.
+    generalize (Forall_gt_lgen n). intros F.
+    remember (lgen n) as ls eqn : E.
     remember (length ls) as ln eqn : En. clear E.
     generalize dependent ls.
     induction ln as [ | ln IH]; intros.
@@ -140,13 +141,16 @@ Section generators.
       * apply IH; auto.
   Qed.
 
-  Theorem nhsum_all a : a ∈ M -> exists n, nhsum n = a.
+  Theorem mgen_complete a : a ∈ M -> exists n, mgen n = a.
   Proof.
     intros Aa. destruct (generator_generated gen) as [_ G].
     destruct (G a Aa) as [r x k Hr].
     set (l := flat_map (fun i => repeat (lookup_inv gen (x i)) (k i)) (seq 0 r)).
     set (ol := reverse (merge_sort le l)).
-    destruct (nh_all (length gen - 1) ol) as [n Hn].
+    destruct (lgen_complete (length gen - 1) ol) as [n Hn];
+      [split|].
+    - subst ol. apply Sorted_reverse.
+      apply Sorted_merge_sort. intros ?. lia.
     - apply Forall_impl with (P := gt (length gen));
 	[|intros; lia].
       subst ol. apply Forall_reverse.
@@ -156,9 +160,7 @@ Section generators.
       rewrite repeat_replicate. apply Forall_replicate.
       apply lookup_inv_lt. apply Hr.
       apply elem_of_seq in Hy. lia.
-    - subst ol. apply Sorted_reverse.
-      apply Sorted_merge_sort. intros ?. lia.
-    - exists n. unfold nhsum. rewrite Hn. clear n Hn.
+    - exists n. unfold mgen. rewrite Hn. clear n Hn.
       rewrite (Permutation_sum_list_with _ _ l).
       + subst l. rewrite sum_list_with_flat_map.
 	clear Aa. induction r; try reflexivity.
@@ -177,23 +179,24 @@ Section generators.
 	* apply merge_sort_Permutation.
   Qed.
 
-  Theorem nhsum_all_limit m a : a ∈ M -> a < nth_limit m ->
-    exists n, n < m /\ nhsum n = a.
+  Theorem mgen_complete_lt m a :
+    a ∈ M -> a < nth_limit m ->
+    exists n, n < m /\ mgen n = a.
   Proof.
     intros Aa L.
-    destruct (nhsum_all a) as [n Hn]; try assumption.
+    destruct (mgen_complete a) as [n Hn]; try assumption.
     exists n. split; try assumption. subst.
     destruct (le_gt_cases m n); try assumption.
     apply Arith_base.lt_not_le_stt in L.
     exfalso. apply L.
-    eapply le_trans; [|apply nhsum_le].
-    apply mul_le_mono_r. now apply nh_le_length.
+    eapply le_trans; [|apply nth_limit_le_mgen].
+    apply mul_le_mono_r. now apply length_lgen_le.
   Qed.
 
   Fixpoint small_list_aux n :=
     match n with
     | 0 => []
-    | S n => nhsum n :: small_list_aux n
+    | S n => mgen n :: small_list_aux n
     end.
 
   Definition small_list n :=
@@ -203,7 +206,7 @@ Section generators.
     a ∈ M -> a < nth_limit n -> a ∈ small_list n.
   Proof.
     intros Aa L.
-    destruct (nhsum_all_limit n a) as [m Hm];
+    destruct (mgen_complete_lt n a) as [m Hm];
       try assumption.
     destruct Hm as [Hm E]. subst.
     generalize Hm. clear. intros.
@@ -221,7 +224,7 @@ Section generators.
     rewrite <- sorted_nodup_in, merge_sort_Permutation.
     intros Ha. induction i; [inversion Ha|].
     simpl in *. set_unfold in Ha. destruct Ha; [|auto].
-    subst. apply nhsum_in.
+    subst. apply mgen_correct.
   Qed.
 
   Theorem small_list_sorted i : Sorted lt (small_list i).
@@ -451,8 +454,7 @@ Section generators.
   Qed.
 
   Theorem small_els_spec i : term i ->
-    forall x, x ∈ small_els i <->
-    x ∈ M ∧ x <= cond i.
+    forall x, x ∈ small_els i <-> x ∈ M ∧ x <= cond i.
   Proof.
     intros T x.
     rewrite small_els_alt; [|assumption].
