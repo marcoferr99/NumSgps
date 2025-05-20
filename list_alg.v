@@ -306,10 +306,12 @@ Section lgen.
 
   Definition le_length m l := length (filter (fun x => m <= x) l).
 
-  Theorem le_length_app n l m :
-    le_length n (l ++ m) = le_length n l + le_length n m.
+  Theorem le_length_cons m h t :
+    le_length m (h :: t) =
+    if decide (m <= h) then S (le_length m t) else le_length m t.
   Proof.
-    unfold le_length. rewrite filter_app. apply length_app.
+    unfold le_length. rewrite filter_cons.
+    now destruct (decide (m <= h)).
   Qed.
 
   Theorem find_le_le_length m l : sorted l ->
@@ -328,13 +330,33 @@ Section lgen.
       eapply Forall_forall in F; [|eassumption]. lia.
   Qed.
 
-  Theorem find_le_0 l : sorted l -> find_le 0 l = length l.
+  Theorem take_le_length m l : sorted l ->
+    Forall (fun x => m <= x) (take (le_length m l) l).
   Proof.
-    intros SR. rewrite find_le_le_length; [|assumption].
+    intros SR.
+    rewrite <- find_le_le_length; [|assumption].
+    now apply find_le_take.
+  Qed.
+
+  Theorem drop_le_length m l : sorted l ->
+    Forall (fun x => x < m) (drop (le_length m l) l).
+  Proof.
+    intros SR.
+    rewrite <- find_le_le_length; [|assumption].
+    now apply find_le_drop.
+  Qed.
+
+  Theorem le_length_app n l m :
+    le_length n (l ++ m) = le_length n l + le_length n m.
+  Proof.
+    unfold le_length. rewrite filter_app. apply length_app.
+  Qed.
+
+  Theorem le_length_0 l : le_length 0 l = length l.
+  Proof.
     induction l; [reflexivity|].
     unfold le_length in *. simpl.
-    rewrite IHl; [reflexivity|].
-    now inversion SR.
+    now rewrite IHl.
   Qed.
 
   Theorem le_length_le n m l :
@@ -367,562 +389,289 @@ Section lgen.
     apply elem_of_drop. eauto.
   Qed.
 
-  Definition find_le_eq m k l :=
-    forall i, i < m -> find_le i l = k i.
+  Theorem le_length_replicate m n x :
+    le_length m (replicate n x) =
+    if decide (m <= x) then n else 0.
+  Proof.
+    induction n; simpl.
+    - destruct (decide (m <= x)); reflexivity.
+    - unfold le_length in *. rewrite filter_cons.
+      destruct (decide (m <= x)); simpl; now rewrite IHn.
+  Qed.
 
-  Definition find_le_eq_lgen m k :=
-    forall l, gelist l -> find_le_eq m k l ->
+  Definition le_length_eq m k l :=
+    forall i, i < m -> le_length i l = k i.
+
+  Definition le_length_eq_lgen m k :=
+    forall l, gelist l -> le_length_eq m k l ->
     exists n, lgen n = l.
 
-  (*Theorem find_le_eq_lt m k l :
-    find_le_eq m k l -> k m < length l.
+  Theorem list_replicate l n :
+    Forall (eq n) l -> l = replicate (length l) n.
   Proof.
-    unfold find_le_eq. intros F.
-    specialize F with m. unfold fsucc in F.
-    destruct (eqb_spec m m); [|lia].
-    unfold "<". rewrite <- F; [|lia].
-    apply find_le_length.
-  Qed.*)
-
-  Theorem list_replicate l m n :
-    length l = m -> Forall (eq n) l -> l = replicate m n.
-  Proof.
-    intros L F. generalize dependent l.
+    intros F. remember (length l) as m eqn : E.
+    generalize dependent l.
     induction m; simpl; intros;
       [now apply length_zero_iff_nil|].
     destruct l; simpl in *; [lia|].
     inversion F. f_equal; [easy|].
-    apply IHm; [lia|assumption].
+    apply IHm; [assumption|lia].
   Qed.
 
-  Theorem find_le_replicate_drop l : gelist l ->
-    l = replicate (find_le max l) max ++ drop (find_le max l) l.
+  Theorem take_le_length_replicate l m :
+    sorted l -> Forall (fun x => x <= m) l ->
+    take (le_length m l) l = replicate (le_length m l) m.
   Proof.
-    intros G.
-    rewrite <- (take_drop (find_le max l) l) at 1.
-    f_equal.
-    apply list_replicate.
-    - apply length_take_le. apply find_le_length.
-    - apply Forall_forall. intros x Hx.
-      apply le_antisymm.
-      + eapply Forall_forall; [apply find_le_take|].
-	eassumption.
-      + destruct G as [_ G].
-	eapply Forall_forall in G; [eassumption|].
-	apply elem_of_take in Hx as [i [Hi _]].
-	eapply elem_of_list_lookup_2. eassumption.
+    intros SR F.
+    replace (le_length m l) with (length (take (le_length m l) l)) at 2;
+      [|apply length_take_le; apply length_filter].
+    apply list_replicate. apply Forall_forall.
+    intros a Ha. apply elem_of_take in Ha as [i Hi].
+    apply le_antisymm.
+    - eapply le_length_lookup_le;
+	try eassumption; apply Hi.
+    - eapply Forall_forall in F; [eassumption|].
+      eapply elem_of_list_lookup_2. apply Hi.
   Qed.
 
-  Theorem find_le_0_lgen m k l : m <= S max -> gelist l ->
-    find_le_eq_lgen m k ->
-    find_le_eq m k l -> find_le m l = S (k m) ->
-    find_le (S m) l = 0 -> exists n, lgen n = l.
+  Theorem le_length_0_lgen m k l :
+    m <= max -> gelist l -> le_length_eq_lgen (S m) k ->
+    le_length_eq m k l -> le_length m l = S (k m) ->
+    le_length (S m) l = 0 -> exists n, lgen n = l.
   Proof.
+    unfold le_length_eq.
     intros Lm [SR M] A F Fm FS.
     generalize (lookup_lt_is_Some_2 l (k m)). intros IS.
-    destruct IS as [x Hx]. {
-      unfold "<". rewrite <- Fm. apply find_le_length.
+    assert (Lk : k m < length l). {
+      unfold "<". rewrite <- Fm. apply length_filter.
     }
+    destruct IS as [x Hx]; [assumption|].
     replace x with m in *.
     2:{
       apply le_antisymm.
       - eapply Forall_forall; [apply find_le_take|].
 	apply elem_of_take. exists (k m).
-	split; [eassumption|]. rewrite Fm. lia.
+	split; [eassumption|].
+	rewrite find_le_le_length; [|assumption].
+	rewrite Fm. lia.
       - assert (x < S m); [|lia].
 	generalize (find_le_drop (S m) l). intros FD.
 	eapply Forall_forall in FD; [eassumption|assumption|].
 	apply elem_of_drop. exists (k m).
+	rewrite find_le_le_length; [|assumption].
 	split; [assumption|]. lia.
     }
-    erewrite <- (take_drop_middle l (k m)); [|eassumption].
+    generalize (take_drop_middle l (k m) m Hx). intros El.
     remember (drop (S (k m)) l) as d eqn : Ed.
     set (md := match m with 0 => [] | S m => [m] end).
-    set (h := replicate (S (k m)) max ++ md ++ d).
-    destruct (A h).
-    - split.
-      + subst h md. destruct m.
-	* subst d. rewrite <- Fm.
-	  rewrite find_le_0; [|assumption].
-	  rewrite drop_all. repeat rewrite app_nil_r.
-	  apply (Sorted_replicate _).
-	* remember (S (k (S m))) as y eqn : E.
-	  simpl. apply Sorted_middle.
-	  -- eapply (Sorted_app _).
-    rewrite (find_le_replicate_drop l G).
-    destruct (drop (find_le max l) l) eqn : D.
-    - rewrite app_nil_r.
-      unfold find_le_eq_lgen in A.
-    generalize (mlk_lt _ _ _ Hl); clear mlk_lt;
-      intros mlk_lt.
-    generalize (firstn_skipn (k m) l).
-    intros El. symmetry in El.
-    rewrite drop_lookup in El; try assumption.
-    generalize (mlk_Sk _ _ _ Hl); clear mlk_Sk;
-      intros mlk_Sk.
-    destruct (GR l m k) as [n Hn];
-      [split| | | |]; try assumption.
-    exists (S n). unfold lgen in *.
-    simpl. rewrite Hn. clear Hn n.
-    assert (FR : firstn (k m) l = repeat m (k m)). {
-      apply list_eq. intros i.
-      destruct (le_gt_cases (k m) i).
-      - rewrite lookup_ge_None_2;
-	  [|rewrite length_take_le; lia].
-	rewrite lookup_ge_None_2; [reflexivity|].
-	now rewrite repeat_length.
-      - rewrite list_lookup_lookup_total;
-	  [|apply lookup_lt_is_Some; rewrite length_take_le; lia].
-	rewrite list_lookup_lookup_total;
-	  [|apply lookup_lt_is_Some; rewrite repeat_length; lia].
-	f_equal.
-	rewrite El in F.
-	apply Forall_app in F as [F _].
-	eapply Forall_lookup_total in Fle;
-	  try eassumption.
-	+ apply le_antisymm; try eassumption.
-	  rewrite lookup_total_take; [|assumption].
-	  rewrite repeat_replicate.
-	  rewrite lookup_total_replicate_2;
-	    [|assumption].
-	  assert (l !!! i < S m); [|lia].
-	  apply ml_lookup_lt; try assumption; lia.
-	+ rewrite repeat_replicate.
-	  rewrite lookup_total_replicate_2;
-	    [lia|assumption].
-	+ rewrite firstn_length_le; lia.
+    set (h := replicate (k m) max ++ md ++ d).
+    assert (d0 : m = 0 -> d = []). {
+      intros. subst. rewrite <- Fm.
+      rewrite le_length_0. apply drop_all.
     }
-    apply NR in Hl as R; try assumption. clear NR.
-    rewrite El at 2. rewrite R, FR.
-    replace (l !!! k m :: skipn (S (k m)) l) with ([l !!! k m] ++ skipn (S (k m)) l); try reflexivity.
-    rewrite app_assoc. f_equal.
-    replace [l !!! k m] with (repeat m 1).
-    + rewrite <- repeat_app. now rewrite add_comm.
-    + simpl. f_equal. apply le_antisymm.
-      * apply ml_lookup_ge; try assumption. lia.
-      * assert (l !!! k m < S m); [|lia].
-	apply ml_lookup_lt; try assumption. lia.
+    assert (Smd : sorted (md ++ d)). {
+      subst md. destruct m.
+      - rewrite d0; constructor.
+      - simpl. constructor.
+	+ subst d. eapply Sorted_app_r.
+	  now rewrite take_drop.
+	+ destruct d; constructor.
+	  generalize (drop_le_length (S m) l SR).
+	  intros FD. rewrite Forall_forall in FD.
+	  assert (n < S m); [|lia]. apply FD.
+	  rewrite Fm, <- Ed. left.
     }
-
-  Theorem GR m k l : m <= max -> gelist l ->
-    find_le_eq_lgen m k -> find_le_eq m (fsucc m k) l ->
-    let md := match m with 0 => [] | S n => [n] end in
-    let h := repeat max (k m) ++ md ++ drop (S (k m)) l in
-    exists n, lgen n = h.
-  Proof.
-    intros Lm G A F md h.
-      generalize (mlk_lt _ _ _ Hl). clear mlk_lt.
-      intros mlk_lt.
-      generalize (mlk_Sk _ _ _ Hl). clear mlk_Sk.
-      intros mlk_Sk.
-      generalize (FS _ _ _ L Hl). clear FS. intros FS.
-      assert (Lh : sorted h). {
-	subst h. destruct m; subst md.
-	- rewrite app_nil_l.
-	  remember (drop (S (k 0)) l) as s eqn : E.
-	  clear E. destruct s.
-	  + rewrite app_nil_r. apply repeat_sorted.
-	  + inversion FS. lia.
-	- apply Sorted_middle.
-	  + apply sorted_app_le with max; [lia|].
-	    replace [max] with (repeat max 1);
-	      try reflexivity.
-	    rewrite <- repeat_app. apply repeat_sorted.
-	  + remember (drop (S (k (S m))) l) as s eqn : E.
-	    constructor.
-	    * rewrite E.
-	      rewrite <- (firstn_skipn (S (k (S m)))) in L.
-	      apply Sorted_app_r in L. assumption.
-	    * inversion FS; constructor. lia.
-      }
-      apply H; [split|]; try assumption.
-      - subst h. apply Forall_app.
-	rewrite repeat_replicate.
-	split; [apply Forall_replicate; lia|].
-	apply Forall_app. split.
-	+ subst md.
-	  destruct m; constructor; [lia | constructor].
-	+ rewrite <- (firstn_skipn (S (k m))) in F.
-	  apply Forall_app in F. apply F.
-      - intros i Hil. apply Hl in Hil as Hi.
-	destruct m.
-	+ subst md h. assert (i = 0); [lia|]. subst.
-	  destruct (skipn (S (k 0))).
-	  * repeat rewrite app_nil_r in *.
-	    rewrite ml_0. apply repeat_length.
-	  * inversion FS. lia.
-	+ generalize (firstn_skipn (k (S m)) l).
-	  rewrite drop_lookup; try assumption.
-	  intros El. symmetry in El.
-	  subst Sk. simpl in Hi, Hl.
-	  destruct (eqb_spec i (S m)).
-	  * subst. apply le_antisymm.
-	    -- destruct (le_gt_cases (ml (S m) h) (k (S m))) as [C | C]; try assumption.
-		apply ml_lookup_ge in C; try assumption.
-		unfold h in C.
-		rewrite lookup_total_app_r in C;
-		  rewrite repeat_length in *; [|lia].
-		rewrite sub_diag in C.
-		subst md. simpl in C. lia.
-	    -- assert (length l = length h). {
-		 rewrite El. subst h.
-		 repeat rewrite length_app.
-		 remember (drop (S (k (S m))) l) as s.
-		 simpl. f_equal.
-		 rewrite firstn_length_le; try lia.
-		 symmetry. apply repeat_length.
-	       }
-	       destruct (le_gt_cases (k (S m)) (ml (S m) h)) as [C | C]; try assumption.
-		unfold "<" in C.
-		destruct (k (S m)); [subst; lia|].
-		apply le_S_n in C.
-		apply ml_lookup_lt in C; [|assumption|lia].
-		unfold h in C.
-		rewrite lookup_total_app_l in C;
-		  [|rewrite repeat_length; lia].
-		rewrite repeat_replicate in C.
-		rewrite lookup_total_replicate_2 in C; lia.
-	  * subst md. rewrite <- Hi, El. unfold h.
-	    remember (drop (S (k (S m))) l) as s.
-	    replace (l !!! (k (S m)) :: s) with ([l !!! (k (S m))] ++ s); try reflexivity.
-	    repeat rewrite ml_app. f_equal.
-	    -- replace (ml i (take (k (S m)) l)) with (k (S m)).
-	       ++ generalize F Hil Lm. clear.
-		  intros F Hil Lm.
-		  induction (k (S m)); try reflexivity.
-		  simpl. destruct (leb_spec i max); lia.
-	       ++ eapply Fle in Hl as Fl; try eassumption.
-		  remember (firstn (k (S m)) l) as fs.
-		  assert (Lk : length fs = k (S m)). {
-		    subst fs. apply firstn_length_le. lia.
-		  }
-		  generalize Lk Fl. clear. intros.
-		  remember (k (S m)) as x eqn : E. clear E.
-		  generalize dependent x.
-		  induction fs;
-		    intros; simpl in *; [auto|].
-		  destruct (leb_spec i a);
-		    [|inversion Fl; lia].
-		  destruct x; simpl in Lk; [lia|].
-		  f_equal.
-		  apply IHfs; simpl in Lk; [|lia].
-		  inversion Fl. assumption.
-	    -- f_equal. simpl.
-	       destruct (leb_spec i m), (leb_spec0 i (l !!! (k (S m)))); try lia.
-	       exfalso. apply n0.
-	       apply ml_lookup_ge; try assumption.
-	       rewrite Hi. apply (ml_le l) in Hil. lia.
-    }
-
-  Theorem lgen_complete :
-    forall l, gelist l -> exists n, lgen n = l.
-  Proof.
-    (*assert (repeat_sorted :
-      forall n m, sorted (repeat n m)
-    ). {
-      clear. intros.
-      induction m; simpl; constructor; [assumption|].
-      destruct m; simpl; constructor. auto.
-    }*)
-    (*assert (mlk_Sk :
-      forall l m k, mlk m (Sk m k) l -> le_length m l = S (k m)
-    ). {
-      clear. intros l m k Hl. subst mlk Sk. simpl in Hl.
-      specialize Hl with m.
-      destruct (eqb_spec m m); lia.
-    }*)
-    (*assert (mlk_lt :
-      forall l m k, mlk m (Sk m k) l -> k m < length l
-    ). {
-      intros. rewrite <- ml_0.
-      unfold "<". erewrite <- mlk_Sk; try eassumption.
-      apply ml_le. lia.
-    }*)
-
-    assert (Fle :
-      forall l m k, sorted l -> mlk m (Sk m k) l ->
-      forall i, i <= m -> Forall (le i) (firstn (k m) l)
-    ). {
-      intros l m k L Hl i Hi.
-      eapply Forall_lookup_total_2.
-      intros j Hj.
-      apply mlk_Sk in Hl as MS. apply mlk_lt in Hl as ML.
-      rewrite length_take_le in Hj; [|lia].
-      rewrite lookup_total_take; [|assumption].
-      apply ml_lookup_ge; try assumption.
-      apply (ml_le l) in Hi. lia.
-    }
-    assert (FS :
-      forall l m k, sorted l -> mlk m (Sk m k) l ->
-      Forall (gt m) (drop (S (k m)) l)
-    ). {
-      intros l m k L Hl.
-      eapply Forall_lookup_total_2. intros i Hi.
-      rewrite lookup_total_drop.
-      apply mlk_Sk in Hl. rewrite length_drop in Hi.
-      apply ml_lookup_lt; try assumption; lia.
-    }
-
-    assert (GR :
-      forall l m k, gelist l ->
-      all m k -> mlk m (Sk m k) l -> m <= max ->
-      let md := match m with 0 => [] | S n => [n] end in
-      let h :=
-	repeat max (k m) ++ md ++ skipn (S (k m)) l in
-      exists n, lgen n = h
-    ). {
-      intros l m k [L F] H Hl Lm md h.
-      generalize (mlk_lt _ _ _ Hl). clear mlk_lt.
-      intros mlk_lt.
-      generalize (mlk_Sk _ _ _ Hl). clear mlk_Sk.
-      intros mlk_Sk.
-      generalize (FS _ _ _ L Hl). clear FS. intros FS.
-      assert (Lh : sorted h). {
-	subst h. destruct m; subst md.
-	- rewrite app_nil_l.
-	  remember (drop (S (k 0)) l) as s eqn : E.
-	  clear E. destruct s.
-	  + rewrite app_nil_r. apply repeat_sorted.
-	  + inversion FS. lia.
-	- apply Sorted_middle.
-	  + apply sorted_app_le with max; [lia|].
-	    replace [max] with (repeat max 1);
-	      try reflexivity.
-	    rewrite <- repeat_app. apply repeat_sorted.
-	  + remember (drop (S (k (S m))) l) as s eqn : E.
-	    constructor.
-	    * rewrite E.
-	      rewrite <- (firstn_skipn (S (k (S m)))) in L.
-	      apply Sorted_app_r in L. assumption.
-	    * inversion FS; constructor. lia.
-      }
-      apply H; [split|]; try assumption.
-      - subst h. apply Forall_app.
-	rewrite repeat_replicate.
-	split; [apply Forall_replicate; lia|].
-	apply Forall_app. split.
-	+ subst md.
-	  destruct m; constructor; [lia | constructor].
-	+ rewrite <- (firstn_skipn (S (k m))) in F.
-	  apply Forall_app in F. apply F.
-      - intros i Hil. apply Hl in Hil as Hi.
-	destruct m.
-	+ subst md h. assert (i = 0); [lia|]. subst.
-	  destruct (skipn (S (k 0))).
-	  * repeat rewrite app_nil_r in *.
-	    rewrite ml_0. apply repeat_length.
-	  * inversion FS. lia.
-	+ generalize (firstn_skipn (k (S m)) l).
-	  rewrite drop_lookup; try assumption.
-	  intros El. symmetry in El.
-	  subst Sk. simpl in Hi, Hl.
-	  destruct (eqb_spec i (S m)).
-	  * subst. apply le_antisymm.
-	    -- destruct (le_gt_cases (ml (S m) h) (k (S m))) as [C | C]; try assumption.
-		apply ml_lookup_ge in C; try assumption.
-		unfold h in C.
-		rewrite lookup_total_app_r in C;
-		  rewrite repeat_length in *; [|lia].
-		rewrite sub_diag in C.
-		subst md. simpl in C. lia.
-	    -- assert (length l = length h). {
-		 rewrite El. subst h.
-		 repeat rewrite length_app.
-		 remember (drop (S (k (S m))) l) as s.
-		 simpl. f_equal.
-		 rewrite firstn_length_le; try lia.
-		 symmetry. apply repeat_length.
-	       }
-	       destruct (le_gt_cases (k (S m)) (ml (S m) h)) as [C | C]; try assumption.
-		unfold "<" in C.
-		destruct (k (S m)); [subst; lia|].
-		apply le_S_n in C.
-		apply ml_lookup_lt in C; [|assumption|lia].
-		unfold h in C.
-		rewrite lookup_total_app_l in C;
-		  [|rewrite repeat_length; lia].
-		rewrite repeat_replicate in C.
-		rewrite lookup_total_replicate_2 in C; lia.
-	  * subst md. rewrite <- Hi, El. unfold h.
-	    remember (drop (S (k (S m))) l) as s.
-	    replace (l !!! (k (S m)) :: s) with ([l !!! (k (S m))] ++ s); try reflexivity.
-	    repeat rewrite ml_app. f_equal.
-	    -- replace (ml i (take (k (S m)) l)) with (k (S m)).
-	       ++ generalize F Hil Lm. clear.
-		  intros F Hil Lm.
-		  induction (k (S m)); try reflexivity.
-		  simpl. destruct (leb_spec i max); lia.
-	       ++ eapply Fle in Hl as Fl; try eassumption.
-		  remember (firstn (k (S m)) l) as fs.
-		  assert (Lk : length fs = k (S m)). {
-		    subst fs. apply firstn_length_le. lia.
-		  }
-		  generalize Lk Fl. clear. intros.
-		  remember (k (S m)) as x eqn : E. clear E.
-		  generalize dependent x.
-		  induction fs;
-		    intros; simpl in *; [auto|].
-		  destruct (leb_spec i a);
-		    [|inversion Fl; lia].
-		  destruct x; simpl in Lk; [lia|].
-		  f_equal.
-		  apply IHfs; simpl in Lk; [|lia].
-		  inversion Fl. assumption.
-	    -- f_equal. simpl.
-	       destruct (leb_spec i m), (leb_spec0 i (l !!! (k (S m)))); try lia.
-	       exfalso. apply n0.
-	       apply ml_lookup_ge; try assumption.
-	       rewrite Hi. apply (ml_le l) in Hil. lia.
-    }
-
-    assert (NR :
-      forall l m k, sorted l ->
-      mlk m (Sk m k) l -> m <= max ->
-      let md := match m with 0 => [] | S n => [n] end in
-      next (repeat max (k m) ++ md ++ (skipn (S (k m)) l)) = repeat m (S (k m)) ++ (skipn (S (k m)) l)
-    ). {
-      intros l m k L Hl Lm md.
-      generalize (FS _ _ _ L Hl); clear FS; intros FS.
-      generalize (mlk_Sk _ _ _ Hl); clear mlk_Sk;
-	intros mlk_Sk.
-      destruct m.
-      + subst md. rewrite app_nil_l.
-	remember (skipn (S (k 0)) l) as s.
-	destruct s; [|inversion FS; lia].
+    assert (Sh : sorted h). {
+      subst h md. destruct m.
+      - rewrite d0; [|reflexivity].
 	repeat rewrite app_nil_r.
-	clear. induction (k 0); try reflexivity.
-	simpl. destruct (ltb_spec max max); [lia|].
-	rewrite IHn. reflexivity.
-      + subst md. apply next_repeat. lia.
+	apply (Sorted_replicate _).
+      - remember (S (k (S m))) as y eqn : E.
+	simpl. apply Sorted_middle; [|assumption].
+	+ apply (Sorted_app _ _ max).
+	  * lia.
+	  * replace [max] with (replicate 1 max);
+	      [|reflexivity].
+	    rewrite <- replicate_add.
+	    apply (Sorted_replicate _).
     }
-
-    assert (B :
-    forall l m k, gelist l ->
-      all m k -> mlk m (Sk m k) l -> m <= max ->
-      ml (S m) l = 0 ->
-      exists n, lgen n = l
-    ). {
-      intros l m k [L F] H Hl Lm Hm.
-      generalize (mlk_lt _ _ _ Hl); clear mlk_lt;
-	intros mlk_lt.
-      generalize (firstn_skipn (k m) l).
-      intros El. symmetry in El.
-      rewrite drop_lookup in El; try assumption.
-      generalize (mlk_Sk _ _ _ Hl); clear mlk_Sk;
-	intros mlk_Sk.
-      destruct (GR l m k) as [n Hn];
-	[split| | | |]; try assumption.
-      exists (S n). unfold lgen in *.
-      simpl. rewrite Hn. clear Hn n.
-      assert (FR : firstn (k m) l = repeat m (k m)). {
-	apply list_eq. intros i.
-	destruct (le_gt_cases (k m) i).
-	- rewrite lookup_ge_None_2;
-	    [|rewrite length_take_le; lia].
-	  rewrite lookup_ge_None_2; [reflexivity|].
-	  now rewrite repeat_length.
-	- rewrite list_lookup_lookup_total;
-	    [|apply lookup_lt_is_Some; rewrite length_take_le; lia].
-	  rewrite list_lookup_lookup_total;
-	    [|apply lookup_lt_is_Some; rewrite repeat_length; lia].
-	  f_equal.
-	  rewrite El in F.
-	  apply Forall_app in F as [F _].
-	  eapply Forall_lookup_total in Fle;
-	    try eassumption.
-	  + apply le_antisymm; try eassumption.
-	    rewrite lookup_total_take; [|assumption].
-	    rewrite repeat_replicate.
-	    rewrite lookup_total_replicate_2;
-	      [|assumption].
-	    assert (l !!! i < S m); [|lia].
-	    apply ml_lookup_lt; try assumption; lia.
-	  + rewrite repeat_replicate.
-	    rewrite lookup_total_replicate_2;
-	      [lia|assumption].
-	  + rewrite firstn_length_le; lia.
+    destruct (A h) as [n Hn]; [split| |].
+    - apply Sh.
+    - subst h. apply Forall_app.
+      split; [|apply Forall_app; split].
+      + now apply Forall_replicate.
+      + destruct m; subst md;
+	  constructor; [lia|constructor].
+      + eapply Forall_app.
+	subst d. now rewrite take_drop.
+    - intros i Hi.
+      destruct m. {
+	subst h.
+        rewrite d0 in *; try reflexivity.
+	subst md.
+	repeat rewrite app_nil_r in *.
+	rewrite le_length_replicate.
+	destruct (decide (i <= max)); [|lia].
+	replace i with 0; lia.
       }
-      apply NR in Hl as R; try assumption. clear NR.
-      rewrite El at 2. rewrite R, FR.
-      replace (l !!! k m :: skipn (S (k m)) l) with ([l !!! k m] ++ skipn (S (k m)) l); try reflexivity.
-      rewrite app_assoc. f_equal.
-      replace [l !!! k m] with (repeat m 1).
-      + rewrite <- repeat_app. now rewrite add_comm.
-      + simpl. f_equal. apply le_antisymm.
-	* apply ml_lookup_ge; try assumption. lia.
-	* assert (l !!! k m < S m); [|lia].
-	  apply ml_lookup_lt; try assumption. lia.
-    }
+      subst md.
+      assert (Lh : length h = length l). {
+	subst h. rewrite <- El.
+	repeat rewrite length_app. simpl.
+	rewrite length_replicate.
+	rewrite length_take_le; lia.
+      }
+      destruct (eq_dec i (S m)).
+      + subst. apply le_antisymm.
+	* apply le_ngt. intros N.
+	  rewrite <- Lh in Lk.
+	  apply lookup_lt_is_Some_2 in Lk as [y Hy].
+	  apply le_length_lookup_le with (x := y) in N;
+	    try assumption.
+	  unfold h in Hy. simpl in Hy.
+	  rewrite list_lookup_middle in Hy;
+	    [|now rewrite length_replicate].
+	  injection Hy as Hy. subst. lia.
+	* apply le_ngt. intros N.
+	  unfold "<" in N. destruct (k (S m)); [lia|].
+	  assert (Ln : n < length l); [lia|].
+	  rewrite <- Lh in Ln.
+	  apply lookup_lt_is_Some_2 in Ln as [y Hy].
+	  apply le_S_n, le_length_lookup_lt with (x := y) in N; try assumption.
+	  subst h.
+	  rewrite lookup_app_l in Hy;
+	    [|rewrite length_replicate; lia].
+	  apply lookup_replicate_1 in Hy. lia.
+      + rewrite <- F, <- El; [|lia]. unfold h.
+	repeat rewrite le_length_app.
+	rewrite le_length_cons.
+	destruct (decide (i <= m)); [|lia]. simpl.
+	f_equal.
+	* rewrite le_length_replicate.
+	  destruct (decide (i <= max)); [|lia].
+	  unfold le_length. rewrite filter_all.
+	  -- rewrite length_take_le; lia.
+	  -- apply Forall_forall. intros a Ha.
+	     apply elem_of_take in Ha as [j Hj].
+	     eapply le_length_lookup_le.
+	     ++ apply SR.
+	     ++ apply Hj.
+	     ++ assert (Li : i <= S m); [lia|].
+		apply (le_length_le i (S m) l) in Li.
+		lia.
+	* rewrite le_length_cons.
+	  destruct (decide (i <= S m)); lia.
+    - exists (S n). simpl. rewrite Hn.
+      rewrite <- El.
+      replace (take (k m) l) with (replicate (k m) m).
+      2:{
+	symmetry.
+	replace (k m) with (length (take (k m) l)) at 2;
+	  [|apply length_take_le; lia].
+	apply list_replicate.
+	apply Forall_forall.
+	intros a Ha. unfold eq.
+	apply elem_of_take in Ha as [i Hi].
+	apply le_antisymm.
+	- eapply le_length_lookup_le.
+	  + apply SR.
+	  + apply Hi.
+	  + lia.
+	- assert (a < S m); [|lia].
+	  eapply le_length_lookup_lt.
+	  + apply SR.
+	  + apply Hi.
+	  + lia.
+      }
+      subst h md. destruct m.
+      + rewrite d0 in *; try reflexivity.
+	repeat rewrite app_nil_r.
+	clear. induction (k 0); [reflexivity|].
+	simpl. destruct (ltb_spec max max); [lia|].
+	rewrite IHn.
+	destruct (replicate n 0 ++ [0]) eqn : E.
+	* exfalso. eapply next_not_nil. eassumption.
+	* f_equal. destruct n; injection E; auto.
+      + simpl. repeat rewrite <- repeat_replicate.
+	rewrite next_repeat; [|lia].
+	replace (S (k (S m))) with (k (S m) + 1); [|lia].
+	now rewrite repeat_app, <- app_assoc.
+  Qed.
 
-    assert (forall m k, all (max - m) k ->
-      all (max - m) (Sk (max - m) k)
-    ). {
-      induction m.
-      - rewrite sub_0_r. subst all. simpl in *.
-	intros k H l [L F] Hl.
-	eapply B; try eassumption; try lia;
-	  [split|]; try assumption.
-	apply le_antisymm; try lia.
-	destruct (le_gt_cases (ml (S max) l) 0);
-	  try assumption.
-	apply ml_lookup_ge in H0; try assumption.
-	destruct l; simpl in *; try lia.
-	inversion F. subst. lia.
-      - intros k Hk. unfold all. intros l [L F] Hl.
-	destruct (eq_dec (max - m) 0) as [e | e].
-	+ rewrite e in *.
-	  replace (max - S m) with 0 in *; try lia.
-	  eapply IHm; try eassumption. now split.
-	+ remember (max - S m) as a eqn : Ea.
-	  replace (max - m) with (S a) in *; try lia.
-	  assert (
-	    forall l, sorted l -> ge_max l ->
-	    mlk a (Sk a k) l -> exists n, lgen n = l
-	  ). {
-	    clear dependent l. intros l.
-	    remember (ml (S a) l) as x eqn : E.
-	    generalize dependent l. induction x; intros.
-	    - apply B with a k; auto;
-		[split; assumption|].
-	      lia.
-	    - set (k1 i := if i =? S a then x else ml i l).
-	      apply IHm with k1; [|split|]; try assumption.
-	      + subst all. simpl. intros. destruct H2.
-		destruct IHx with l0; try assumption.
-		* intros. rewrite H3; try lia.
-		  subst k1. simpl.
-		  destruct (eqb_spec a a); lia.
-		* unfold mlk. intros.
-		  rewrite H3; try lia. subst k1. simpl.
-		  destruct (eqb_spec i (S a)); try lia.
-		  rewrite H1; lia.
-		* exists x0. assumption.
-	      + unfold mlk. intros. unfold Sk.
-		destruct (eqb_spec i (S a)).
-		* subst k1. simpl.
-		  destruct (eqb_spec i (S a)); try lia.
-		  subst. lia.
-		* subst k1. simpl.
-		  destruct (eqb_spec i (S a)); lia.
-	  }
-	  apply H; assumption.
-    }
+  Theorem le_length_eq_impl m k :
+    le_length_eq_lgen (S (max - m)) k ->
+    forall l, gelist l -> le_length_eq (max - m) k l ->
+    le_length (max - m) l = S (k (max - m)) ->
+    exists n, lgen n = l.
+  Proof.
+    generalize dependent k.
+    induction m; intros k A l G Fl FS.
+    - repeat rewrite sub_0_r in *.
+      eapply le_length_0_lgen; try eassumption; try lia.
+      apply le_antisymm; try lia.
+      apply le_ngt. intros N.
+      destruct G as [L F].
+      destruct l. {
+	unfold le_length in *. simpl in *. lia.
+      }
+      eapply le_length_lookup_le in N; try assumption;
+	[|now simpl].
+      inversion F. lia.
+    - destruct (eq_dec (max - m) 0) as [E|E].
+      + rewrite E in *.
+	replace (max - S m) with 0 in *; [|lia].
+	eapply IHm; eassumption.
+      + remember (max - S m) as a eqn : Ea.
+	replace (max - m) with (S a) in *; [|lia].
+	assert (
+	  forall l, gelist l -> le_length_eq a k l ->
+	  le_length a l = S (k a) ->
+	  exists n, lgen n = l
+	). {
+	  clear dependent l. intros l.
+	  remember (le_length (S a) l) as x eqn : Ex.
+	  generalize dependent l.
+	  induction x; intros l La G Lk Ek.
+	  - apply le_length_0_lgen with a k; auto; lia.
+	  - apply (IHm (fun i => if i =? (S a) then x else le_length i l)); try assumption.
+	    + intros v Gv Hv.
+	      destruct IHx with v as [n Hn];
+		try assumption.
+	      * rewrite Hv; [|lia].
+		destruct (eqb_spec (S a) (S a)); lia.
+	      * intros i Hi.
+		rewrite Hv; [|lia].
+		destruct (eqb_spec i (S a)); [lia|].
+		rewrite Lk; lia.
+	      * rewrite Hv; [|lia].
+		destruct (eqb_spec a (S a)); [lia|].
+		assumption.
+	      * eauto.
+	    + intros i Hi. destruct (eqb_spec i (S a)).
+	      * subst. lia.
+	      * reflexivity.
+	    + destruct (eqb_spec (S a) (S a)); [|lia].
+	      auto.
+	}
+	auto.
+  Qed.
 
-    intros.
-    remember (length l) as ln.
+  Theorem lgen_complete l :
+    gelist l -> exists n, lgen n = l.
+  Proof.
+    intros G.
+    remember (length l) as ln eqn : E.
     generalize dependent l. induction ln; intros.
     - exists 0.
-      symmetry in Heqln.
-      apply length_zero_iff_nil in Heqln.
-      subst. reflexivity.
-    - set (k (i : nat) := ln). specialize H with max k.
-      rewrite sub_diag in H.
-      subst all. simpl in H. apply H; try assumption.
-      + intros. apply IHln; try assumption.
-	rewrite <- ml_0. rewrite H2; try lia. reflexivity.
-      + unfold mlk, Sk. intros.
-	destruct (eqb_spec i 0); try lia.
-	subst. rewrite ml_0. rewrite <- Heqln. reflexivity.
+      symmetry in E. apply length_zero_iff_nil in E.
+      now subst.
+    - set (k (i : nat) := ln).
+      apply (le_length_eq_impl max k);
+	try assumption; rewrite sub_diag.
+      + intros m Gm L. apply IHln; [assumption|].
+	rewrite <- le_length_0, L; [reflexivity|lia].
+      + intros i Hi. lia.
+      + now rewrite le_length_0.
   Qed.
 
 
@@ -1104,32 +853,22 @@ Section lgen.
 	simpl in *. now injection IHn.
   Qed.
 
-  Theorem list_repeat l : gelist l ->
-    match list_find (fun x => x < max) l with
-    | None => l = repeat max (length l)
-    | Some (p, e) => l = repeat max p ++ e :: drop (S p) l
-    end.
-  Proof.
-    intros.
-    destruct (list_find _ l) eqn : E.
-    - destruct p as [p e].
-      replace (repeat max p) with (take p l).
-      + symmetry. apply take_drop_middle.
-	apply list_find_Some in E. apply E.
-      + apply list_find_Some in E.
-  Admitted.
-
   Theorem lgen_inv_next l : gelist l ->
     lgen_inv (next l) = S (lgen_inv l).
   Proof.
     intros G.
-    generalize (list_repeat l). intros R.
-    destruct (list_find (fun x => x < max) l) eqn : E.
-    - destruct p. rewrite R; [|assumption].
-      apply lgen_lgen_inv. destruct G.
-      apply list_find_Some in E. apply E.
-    - rewrite R; [|assumption].
+    generalize (take_drop (le_length max l) l). intros R.
+    rewrite take_le_length_replicate in R; try apply G.
+    remember (drop (le_length max l)) as d eqn : D.
+    rewrite <- repeat_replicate in R.
+    destruct d eqn : Ed.
+    - rewrite <- R. rewrite app_nil_r.
       apply lgen_lgen_inv_2.
+    - rewrite <- R. apply lgen_lgen_inv.
+      generalize (drop_le_length max l). intros F.
+      eapply Forall_forall in F; try eassumption.
+      + apply G.
+      + rewrite <- D, Ed. left.
   Qed.
 
   Theorem lgen_inv_lgen l : gelist l ->

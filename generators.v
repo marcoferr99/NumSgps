@@ -316,10 +316,13 @@ Section generators.
       unfold cond in Hn2. unfold term in T.
       assert (Ln : n < cond_pos i). {
 	assert (Ln : n <= cond_pos i). {
-	  eapply StronglySorted_lookup_2;
+	  apply le_ngt. intros C.
+	  apply lookup_lt_is_Some in T as [x Hx].
+	  apply lookup_lt_is_Some in Hn1 as [y Hy].
+	  eapply StronglySorted_lookup in C;
 	    try eassumption.
-	  fold (cond i) in *.
-	  rewrite Hn2. unfold cond. lia.
+	  apply list_lookup_total_correct in Hx, Hy.
+	  subst. lia.
 	}
 	assert (n <> cond_pos i); [|lia].
 	intros D. subst. fold (cond i) in *. lia.
@@ -328,12 +331,18 @@ Section generators.
       assert (LSn : S n < length (small_list_limit i));
 	[lia|].
       apply le_antisymm; [lia|].
-      eapply StronglySorted_lookup_2; try eassumption.
+      apply le_ngt. intros C.
+      apply lookup_lt_is_Some in T as [x Hx].
+      apply lookup_lt_is_Some in LSn as [y Hy].
+      apply lookup_lt_is_Some in Hn1 as [z Hz].
+      eapply StronglySorted_lookup in C;
+	    try eassumption.
       fold (cond i) in *.
-      unfold lt. intros D.
+      unfold lt in C.
       assert (nSn : n < S n); [lia|].
       eapply StronglySorted_lookup in nSn; try eassumption.
-      unfold lt in *. rewrite Hn2 in *.
+      apply list_lookup_total_correct in Hx, Hy, Hz.
+      unfold lt in *. subst.
       replace (small_list_limit i !!! cond_pos i) with (cond i) in *; [|reflexivity].
       lia.
   Qed.
@@ -365,13 +374,13 @@ Section generators.
   Qed.
 
   Theorem cond_max i : term i ->
-    (1 ∈ M ∧ cond i = 0) ∨ (set_max ({[x | x ∉ M]}) (cond i - 1)).
+    (1 ∈ M ∧ cond i = 0) ∨ (minimum ge (cond i - 1) ({[x | x ∉ M]})).
   Proof.
     intros T.
     destruct (cond i) eqn : E.
     - left. split; [|reflexivity].
       eapply cond_ge_in; [eassumption|]. lia.
-    - right. unfold set_max. split.
+    - right. split.
       + rewrite elem_of_PropSet, <- E.
 	apply cond_pred_notin; [assumption|lia].
       + intros m Hm. rewrite elem_of_PropSet in Hm.
@@ -401,13 +410,11 @@ Section generators.
 	  assert (x < cond i); [|lia].
 	  apply elem_of_take in Hx as [j [Sx Hx]].
 	  unfold le, cond.
-	  erewrite <- (list_lookup_total_correct _ j x);
-	    [|eassumption].
-	  eapply StronglySorted_lookup.
+	  apply lookup_lt_is_Some in T as [y Hy].
+	  erewrite list_lookup_total_correct; [|eassumption].
+	  eapply StronglySorted_lookup; try eassumption.
 	  -- apply Sorted_StronglySorted; [intros ?; lia|].
 	     apply Sorted_lt_small_list_limit.
-	  -- apply lookup_lt_is_Some. now exists x.
-	  -- assumption.
 	  -- assert (j <> cond_pos i); [|lia].
 	     intros N. apply n.
 	     erewrite <- (list_lookup_total_correct _ j x);
@@ -418,17 +425,16 @@ Section generators.
 	destruct Hx as [L Hx].
 	apply elem_of_list_lookup_1 in Hx as [a Ha].
 	exists a. split; [assumption|].
-	apply le_n_S.
-	eapply StronglySorted_lookup_2.
-	* apply Sorted_StronglySorted;
+	apply le_n_S. apply le_ngt. intros N.
+	apply lookup_lt_is_Some in T as [y Hy].
+	eapply StronglySorted_lookup in N; try eassumption.
+	2:{ apply Sorted_StronglySorted;
 	    [|apply Sorted_lt_small_list_limit].
-	  intros ?. lia.
-	* apply T.
-	* apply lookup_lt_is_Some_1. now exists x.
-	* unfold lt.
-	  erewrite (list_lookup_total_correct _ a);
-	    [|eassumption].
-	  fold (cond i). lia.
+	    intros ?. lia.
+	  }
+	unfold cond in *.
+	apply list_lookup_total_correct in Ha, Hy.
+	subst. lia.
   Qed.
 
   Theorem small_list_limit_small_els i :
@@ -522,6 +528,9 @@ Section generators.
 End generators.
 
 
+Compute term [4;7;10] 60.
+Compute small_els [4;7;10] 60.
+Compute gaps_alg [5;9;21] 60.
 Compute term [5;9;21] 60.
 Compute small_els [5;9;21] 60.
 Compute gaps_alg [5;9;21] 60.

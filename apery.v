@@ -92,7 +92,7 @@ Section apery.
       is congruent to [i] modulo [n] *)
 
   Definition apery_min i w :=
-    set_min {[x | x ∈ M ∧ x mod n = i mod n]} w.
+    minimum le w {[x | x ∈ M ∧ x mod n = i mod n]}.
 
   Theorem apery_min_exists : n <> 0 ->
     forall i, exists w, apery_min i w.
@@ -126,7 +126,7 @@ Section apery.
     intros n0 Mn.
     assert (I : forall x, (exists2 i, i < n & apery_min i x) -> x ∈ apery). {
       intros x [i Hi Hx]. apply apery_spec.
-      unfold apery_min, set_min in *. set_unfold.
+      unfold apery_min, minimum in *. set_unfold.
       split; [intuition|].
       intros L N.
       assert (NL : ~(x <= x - n)); [lia|].
@@ -169,8 +169,9 @@ Section apery.
       induction Hl as [|? j ? AM ? IH]; [lia|].
       destruct (eq_dec i j).
       + replace x with w; [left|].
-	eapply set_min_unique; [apply AM|].
-	subst. apply Hx.
+	eapply minimum_unique; [|apply AM|].
+	* intros ?. lia.
+	* subst. apply Hx.
       + right. apply IH. lia.
   Qed.
 
@@ -181,7 +182,7 @@ Section apery.
     - eapply apery_l2_aux_spec in A.
       intros N. apply A in N. destruct N.
       assert (E : x mod n = i mod n). {
-	unfold apery_min, set_min in *. set_unfold.
+	unfold apery_min, minimum in *. set_unfold.
 	destruct H7 as [[_ CM] _]. rewrite <- CM.
 	symmetry. apply H9.
       }
@@ -237,8 +238,8 @@ Section apery.
 	~ ((a - k * n) ∈ apery) /\ (a - S k * n) ∈ apery
       ) as [k [K1 [K2 K3]]]. {
 	assert (
-	  exists k, set_min {[k | n <= a - S k * n ->
-	    ~ (a - S k * n - n) ∈ M]} k
+	  exists k, minimum le k {[k | n <= a - S k * n ->
+	    ~ (a - S k * n - n) ∈ M]}
 	) as [k [M1 M2]]. {
 	    apply well_ordering_principle.
 	    - intros x.
@@ -258,7 +259,8 @@ Section apery.
 	    destruct (le_gt_cases n a); [lia|].
 	    exfalso. apply Aa. split; [assumption|].
 	    lia.
-	  - specialize M2 with k. set_unfold. lia.
+	  - unfold lower_bound in M2.
+	    specialize M2 with k. set_unfold. lia.
 	}
 	assert (Ak : a - S k * n ∈ M). {
 	  destruct k.
@@ -266,7 +268,7 @@ Section apery.
 	    rewrite add_0_r.
 	    destruct (decide (a - n ∈ M)); [assumption|].
 	    exfalso. apply Aa. split; intros; assumption.
-	  - specialize M2 with k.
+	  - unfold lower_bound in M2. specialize M2 with k.
 	    apply dec_stable. intros I.
 	    assert (N : ~ S k <= k); try lia.
 	    apply N. apply M2. set_unfold. intros.
@@ -359,7 +361,7 @@ Section apery.
       apply Sorted_lt_seq.
     }
     assert (AM : apery_min m (find_mod n conductor m small_elements)). {
-      unfold apery_min, set_min. set_unfold.
+      unfold apery_min, minimum. set_unfold.
       split; [split|].
       - apply (find_mod_in n conductor m small_elements) in n0 as F.
 	destruct F as [F|F].
@@ -386,8 +388,9 @@ Section apery.
     - intros [i Li Hi].
       destruct (eq_dec i m).
       + subst. set_unfold. left.
-	eapply set_min_unique; [eassumption|].
-	apply AM.
+	eapply minimum_unique; [|eassumption|].
+	* intros ?. lia.
+	* apply AM.
       + right. apply IHm. exists i; [lia|]. assumption.
   Qed.
 
