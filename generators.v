@@ -526,11 +526,3 @@ Section generators.
   Definition gaps_alg_term := gaps_alg term_n.*)
 
 End generators.
-
-
-Compute term [4;7;10] 60.
-Compute small_els [4;7;10] 60.
-Compute gaps_alg [5;9;21] 60.
-Compute term [5;9;21] 60.
-Compute small_els [5;9;21] 60.
-Compute gaps_alg [5;9;21] 60.
