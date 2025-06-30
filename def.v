@@ -147,3 +147,32 @@ Proof.
     + exfalso. auto.
     + apply elem_of_seq. lia.
 Qed.
+
+(** Actual equivalent definition *)
+
+Class numerical_semigroup_1 `{Set_ nat C} (M : C) : Set := {
+  ns1_submonoid :: submonoid M;
+  S_element : nat;
+  _ x : Decision (x ∈ M);
+  _ : S_element ∈ M;
+  _ : S S_element ∈ M
+}.
+
+
+(** Functions that map one definition to the other *)
+
+Definition ns1_to_ns `(N : numerical_semigroup_1 C M) :
+  numerical_semigroup M.
+Proof.
+  destruct N. now apply (numerical_semigroup_2 S_element0).
+Qed.
+
+Definition ns_to_ns1 `(N : numerical_semigroup C M) :
+  numerical_semigroup_1 M.
+Proof.
+  econstructor.
+  - apply N.
+  - apply ns_Decision.
+  - apply conductor_le_in. apply le_refl.
+  - apply conductor_le_in. lia.
+Qed.
