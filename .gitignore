@@ -1,0 +1,15 @@
+*.vos
+*.vok
+*.vo
+*.aux
+*.glob
+*.swp
+CoqMakefile
+CoqMakefile.conf
+apery_old
+examples
+git_update
+nat_old
+old
+.CoqMakefile.d
+*.cache
