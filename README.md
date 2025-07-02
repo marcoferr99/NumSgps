@@ -1,11 +1,11 @@
 # Numerical semigroups in Rocq
 
 A formalization of **numerical semigroups** in the proof assistant
-[**Rocq**](https://rocq-prover.org/)
+[**Rocq**](https://rocq-prover.org/).
 
-A description of the project is available in the following research paper: M.
-Bartoletti, S. Bonzio, M. Ferrara. [Certified algorithms for numerical
-semigroups in Rocq](https://arxiv.org/abs/2505.23205), 2025.
+A description of the project is available in the following research paper:
+- M. Bartoletti, S. Bonzio, M. Ferrara. [Certified algorithms for numerical
+  semigroups in Rocq](https://arxiv.org/abs/2505.23205), 2025.
 
 
 ## Requirements
