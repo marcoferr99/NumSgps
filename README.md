@@ -10,7 +10,7 @@ A description of the project is available in the following research paper:
 
 ## Requirements
 
-- [Coq 8.20](https://rocq-prover.org/install) or later.
+- [Coq 8.20](https://rocq-prover.org/install) or later
 
 
 ## Installation
